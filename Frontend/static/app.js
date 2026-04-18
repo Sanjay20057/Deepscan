@@ -270,13 +270,17 @@ async function checkApiStatus() {
   const cb = document.getElementById('cnn-status-badge');
 
   try {
-    const r = await fetch(`${FLASK_ORIGIN}/api/status`, { signal: AbortSignal.timeout(4000) });
+    const r = await fetch(`/api/status`, { signal: AbortSignal.timeout(4000) });
     if (!r.ok) throw new Error('non-200');
     const d = await r.json();
 
     if (d.fastapi_ok && d.model_loaded) {
-      ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Flask + FastAPI</span>';
-      cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Loaded</span>';
+      ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
+      cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
+    } else if (d.flask === 'ok') {
+      // Flask is up — CNN analysis still works even if fastapi ping fails
+      ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
+      cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
     } else {
       ab.innerHTML = '<span class="status-dot dot-warn"></span><span class="status-text">Partial</span>';
       cb.innerHTML = '<span class="status-dot dot-off"></span><span class="status-text">CNN Offline</span>';
