@@ -4,10 +4,11 @@ uvicorn[standard]>=0.29.0
 gunicorn>=21.2.0
 python-dotenv>=1.0.0
 requests>=2.31.0
-tensorflow-cpu==2.16.2
-opencv-python-headless>=4.9.0
-Pillow>=10.3.0
-numpy>=1.26.0
+tensorflow==2.15.0
+opencv-python-headless==4.8.1.78
+Pillow>=10.0.0
+numpy==1.24.3
 python-multipart>=0.0.9
 pydantic>=2.6.0
 werkzeug>=3.0.0
+h5py>=3.9.0
