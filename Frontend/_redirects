@@ -1,1 +1,4 @@
-/api/*  https://deepscan-iohh.onrender.com/api/:splat  200
+/         /landing.html    200
+/app      /index.html      200
+/app.html /index.html      200
+/api/*    https://deepscan-iohh.onrender.com/api/:splat  200
