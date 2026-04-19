@@ -12,8 +12,6 @@ try { analysisHistory = JSON.parse(localStorage.getItem('deepscan_history') || '
 catch (_) { analysisHistory = []; }
 
 const FLASK_ORIGIN = 'https://sanjay72005-deepscan.hf.space';
-
-// Pipeline: CNN-only. fake_prob = 1.0 - raw_sigmoid. Threshold = 0.50.
 const FAKE_THRESHOLD = 0.50;
 
 // ─────────────────────────────────────────────────────────────
@@ -36,15 +34,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Enter key triggers analysis
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    const tag = document.activeElement?.tagName?.toLowerCase();
-    if (tag === 'input' || tag === 'textarea') return; // don't intercept settings fields
-    e.preventDefault();
-    runAnalysis();
-  }
-});
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      e.preventDefault();
+      runAnalysis();
+    }
+  });
 
   const obs = new MutationObserver(muts => {
     muts.forEach(m => m.addedNodes.forEach(node => {
@@ -98,7 +95,8 @@ function openAttachMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('attach-menu');
   if (!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+  const isOpen = menu.style.display !== 'none' && menu.style.display !== '';
+  menu.style.display = isOpen ? 'none' : 'flex';
 }
 
 function closeAttachMenu() {
@@ -129,14 +127,18 @@ function switchView(view) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  MODE SWITCHING
+//  MODE SWITCHING — FIX: never open file picker when switching
+//  modes if a file is already selected or openPicker is false
 // ─────────────────────────────────────────────────────────────
 function selectMode(mode, openPicker = false) {
   currentMode = mode;
   document.querySelectorAll('.gemini-mode-pill').forEach(t => t.classList.remove('active'));
-  document.getElementById('gpill-' + mode).classList.add('active');
+  const pill = document.getElementById('gpill-' + mode);
+  if (pill) pill.classList.add('active');
   const ph = document.getElementById('gemini-placeholder');
   if (ph) ph.textContent = mode === 'image' ? 'Upload an image to analyse…' : 'Upload a video to analyse…';
+
+  // FIX: only open picker if explicitly requested AND no file is already selected
   if (openPicker && !selectedFile) {
     triggerFileInput();
   }
@@ -190,6 +192,7 @@ function handleFile(file) {
     showError(`Unsupported file: <b>${file.name}</b>. Use JPG/PNG for images or MP4/MOV for videos.`);
     return;
   }
+  // FIX: switch mode WITHOUT opening file picker (pass false)
   if (isImg && currentMode !== 'image') selectMode('image', false);
   if (isVid && currentMode !== 'video') selectMode('video', false);
   selectedFile = file;
@@ -263,11 +266,12 @@ function getGroqKey() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  API STATUS — CNN-only, no Sightengine badge
+//  API STATUS
 // ─────────────────────────────────────────────────────────────
 async function checkApiStatus() {
   const ab = document.getElementById('api-status-badge');
   const cb = document.getElementById('cnn-status-badge');
+  if (!ab || !cb) return;
 
   try {
     const r = await fetch(`${FLASK_ORIGIN}/api/status`, { signal: AbortSignal.timeout(4000) });
@@ -278,7 +282,6 @@ async function checkApiStatus() {
       ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
       cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
     } else if (d.flask === 'ok') {
-      // Flask is up — CNN analysis still works even if fastapi ping fails
       ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
       cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
     } else {
@@ -300,6 +303,7 @@ async function flaskIsAlive() {
 
 // ═════════════════════════════════════════════════════════════
 //  MAIN ANALYSIS
+//  FIX: Ensure correct mode is sent based on selectedFile type
 // ═════════════════════════════════════════════════════════════
 async function runAnalysis() {
   if (isAnalysing) return;
@@ -310,7 +314,16 @@ async function runAnalysis() {
   saveSettings();
   lastResult = null;
 
-  const isImage = currentMode === 'image';
+  // FIX: derive isImage from the actual file, not currentMode
+  // This ensures mobile and desktop get the same result
+  const fileName = selectedFile.name.toLowerCase();
+  const fileIsImg = /\.(jpe?g|png|webp)$/.test(fileName) || selectedFile.type.startsWith('image/');
+  const fileIsVid = /\.(mp4|avi|mov|mkv|webm|flv)$/.test(fileName) || selectedFile.type.startsWith('video/');
+  const isImage = fileIsImg || (!fileIsVid && currentMode === 'image');
+
+  // Sync mode pill to match actual file type
+  if (fileIsImg && currentMode !== 'image') selectMode('image', false);
+  if (fileIsVid && currentMode !== 'video') selectMode('video', false);
 
   addUserMessage(
     `<div style="font-size:0.78rem;color:var(--text-2);margin-bottom:4px">${isImage ? 'Image' : 'Video'} · ${(selectedFile.size / 1e6).toFixed(2)} MB</div>` +
@@ -379,10 +392,9 @@ async function runAnalysis() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DEMO BUILDER — CNN-only, threshold 0.50, no Sightengine
+//  DEMO BUILDER
 // ─────────────────────────────────────────────────────────────
 function buildDemoResult(isImage) {
-  // fake_prob = 1 - raw_sigmoid, so simulate directly
   const fakeProbRaw = Math.random();
   const isFake      = fakeProbRaw >= FAKE_THRESHOLD;
   const verdict     = isFake ? 'fake' : 'real';
@@ -424,7 +436,7 @@ function buildDemoResult(isImage) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  RENDER RESULT — no Sightengine chip, threshold 0.50
+//  RENDER RESULT
 // ═════════════════════════════════════════════════════════════
 async function renderResult(result, isImage, isDemo) {
   const verdict  = result.verdict  || 'unknown';
@@ -551,12 +563,11 @@ async function checkServerGroq() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  FRAME GRID — uses fake_prob directly (no ensemble field)
+//  FRAME GRID
 // ═════════════════════════════════════════════════════════════
 function buildFrameGrid(frames) {
   const cards = frames.map(fr => {
     const isFake = fr.verdict === 'fake';
-    // CNN-only: use fake_prob directly (ensemble_fake_prob not present)
     const prob   = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
     const thumb  = fr.thumbnail_b64 ? `data:image/jpeg;base64,${fr.thumbnail_b64}` : null;
     return `
@@ -579,12 +590,11 @@ function buildFrameGrid(frames) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  TIMELINE — uses fake_prob directly
+//  TIMELINE
 // ═════════════════════════════════════════════════════════════
 function buildTimeline(frames) {
   const id    = 'tl_' + Math.random().toString(36).slice(2, 8);
   const ts    = frames.map(f => f.timestamp_sec);
-  // CNN-only: no ensemble_fake_prob field
   const probs = frames.map(f => clamp(parseFloat(f.fake_prob || 0), 0, 1));
   return `
     <div class="timeline-wrap">
@@ -612,7 +622,6 @@ function drawTimeline(canvas) {
         const y = pT + (ch / 4) * i;
         ctx.beginPath(); ctx.moveTo(pL, y); ctx.lineTo(pL + cw, y); ctx.stroke();
       }
-      // Threshold line at 0.50
       const THR = FAKE_THRESHOLD;
       const thrY = yO(THR);
       ctx.strokeStyle = 'rgba(251,188,4,0.5)'; ctx.setLineDash([4, 4]);
@@ -644,7 +653,7 @@ function drawTimeline(canvas) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  FRAME TABLE — Sightengine column removed
+//  FRAME TABLE
 // ═════════════════════════════════════════════════════════════
 function buildFrameTable(frames) {
   const rows = frames.map(fr => {
@@ -676,7 +685,7 @@ function buildFrameTable(frames) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  GROQ — IMAGE (CNN-only context, no Sightengine)
+//  GROQ — IMAGE
 // ═════════════════════════════════════════════════════════════
 async function groqExplainImage(verdict, fakeProb, result, groqKey) {
   const prompt =
@@ -692,7 +701,7 @@ Write 3-5 sentences plain prose: state verdict and confidence, which CNN signals
 }
 
 // ═════════════════════════════════════════════════════════════
-//  GROQ — VIDEO (CNN-only context, no Sightengine)
+//  GROQ — VIDEO
 // ═════════════════════════════════════════════════════════════
 async function groqExplainVideo(verdict, fakeProb, result, groqKey) {
   const frames     = result.frame_results || [];
@@ -786,7 +795,7 @@ async function callGroq(prompt, groqKey) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  PDF DOWNLOAD
+//  PDF DOWNLOAD (unchanged from original)
 // ═════════════════════════════════════════════════════════════
 async function groqWriteSection(prompt, groqKey, fallback = '') {
   if (!groqKey) {
@@ -809,12 +818,7 @@ async function groqWriteSection(prompt, groqKey, fallback = '') {
       const r = await fetch(GROQ_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 500,
-          temperature: 0.4
-        }),
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 500, temperature: 0.4 }),
         signal: AbortSignal.timeout(28000)
       });
       if (r.status === 400 || r.status === 404) continue;
@@ -849,129 +853,73 @@ async function loadImageForPDF(src) {
 async function downloadPDF(btnId) {
   const btn = document.getElementById(btnId);
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating PDF...'; }
-
   try {
     const { jsPDF } = window.jspdf;
     if (!jsPDF) throw new Error('jsPDF not loaded');
-
     const result  = lastResult || {};
     const isImage = result.media_type === 'image' || !result.frame_results;
-
-    if (isImage) {
-      await buildImagePDF(jsPDF, result);
-    } else {
-      await buildVideoPDF(jsPDF, result);
-    }
+    if (isImage) await buildImagePDF(jsPDF, result);
+    else         await buildVideoPDF(jsPDF, result);
   } catch (err) {
     console.error('[DeepScan] PDF error:', err);
     showError('PDF generation failed: ' + err.message);
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg> Download Professional PDF Report`;
+      btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download Professional PDF Report`;
     }
   }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  SHARED COLOUR PALETTE + LOW-LEVEL HELPERS
-// ═════════════════════════════════════════════════════════════
 function palette() {
   return {
-    bg0:    [10,  11,  14],
-    bg1:    [20,  22,  28],
-    bg2:    [28,  30,  36],
-    bg3:    [36,  38,  44],
-    hdr:    [14,  15,  20],
-    fake:   [220, 53,  53],
-    real:   [40,  167, 69],
-    blue:   [66,  133, 244],
-    warn:   [240, 173, 78],
-    t0:     [230, 232, 235],
-    t1:     [170, 175, 182],
-    t2:     [100, 107, 118],
-    border: [42,  44,  50],
-    accent: [50,  52,  70],
+    bg0:[10,11,14],bg1:[20,22,28],bg2:[28,30,36],bg3:[36,38,44],hdr:[14,15,20],
+    fake:[220,53,53],real:[40,167,69],blue:[66,133,244],warn:[240,173,78],
+    t0:[230,232,235],t1:[170,175,182],t2:[100,107,118],border:[42,44,50],accent:[50,52,70]
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// FIX: makeHelpers now also returns safeStr() and T() so that
-//      buildVideoPDF (which destructures them) can use them.
-//      buildImagePDF does NOT destructure T or safeStr so it
-//      is completely unaffected.
-// ─────────────────────────────────────────────────────────────
 function makeHelpers(doc, C, W, M) {
-  // safeStr — converts any value to a safe string for jsPDF
   function safeStr(val, fallback) {
     if (val === null || val === undefined) return fallback !== undefined ? String(fallback) : '';
     return String(val);
   }
-
-  // T — thin wrapper around doc.text that auto-coerces to string
   function T(text, x, y, opts) {
     const str = (text === null || text === undefined) ? '' : String(text);
     if (opts) doc.text(str, x, y, opts);
     else      doc.text(str, x, y);
   }
-
-  function fillBg() {
-    doc.setFillColor(...C.bg0);
-    doc.rect(0, 0, W, 297, 'F');
-  }
+  function fillBg() { doc.setFillColor(...C.bg0); doc.rect(0, 0, W, 297, 'F'); }
   function sectionHead(label, y) {
-    doc.setFillColor(...C.bg1);
-    doc.rect(M, y, W - M * 2, 7, 'F');
-    doc.setFillColor(...C.blue);
-    doc.rect(M, y, 2, 7, 'F');
-    doc.setTextColor(...C.blue);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
+    doc.setFillColor(...C.bg1); doc.rect(M, y, W - M * 2, 7, 'F');
+    doc.setFillColor(...C.blue); doc.rect(M, y, 2, 7, 'F');
+    doc.setTextColor(...C.blue); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
     doc.text(label, M + 5, y + 4.8);
     return y + 10;
   }
   function chip(x, y, w, h, label, value, valColor) {
-    doc.setFillColor(...C.bg1);
-    doc.roundedRect(x, y, w, h, 3, 3, 'F');
-    doc.setDrawColor(...C.border);
-    doc.setLineWidth(0.25);
-    doc.roundedRect(x, y, w, h, 3, 3, 'S');
-    doc.setTextColor(...C.t2);
-    doc.setFontSize(5.5);
-    doc.setFont('helvetica', 'bold');
+    doc.setFillColor(...C.bg1); doc.roundedRect(x, y, w, h, 3, 3, 'F');
+    doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(x, y, w, h, 3, 3, 'S');
+    doc.setTextColor(...C.t2); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
     doc.text(label.toUpperCase(), x + w / 2, y + 5, { align: 'center' });
-    doc.setTextColor(...valColor);
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...valColor); doc.setFontSize(9.5); doc.setFont('helvetica', 'bold');
     doc.text(value, x + w / 2, y + 13, { align: 'center' });
   }
   function prose(text, x, y, maxW, fontSize, color, bold = false) {
-    doc.setTextColor(...color);
-    doc.setFontSize(fontSize);
+    doc.setTextColor(...color); doc.setFontSize(fontSize);
     doc.setFont('helvetica', bold ? 'bold' : 'normal');
     const lines = doc.splitTextToSize(text || '', maxW);
     doc.text(lines, x, y);
     return y + lines.length * (fontSize * 0.4 + 1.6);
   }
   function hr(y) {
-    doc.setDrawColor(...C.border);
-    doc.setLineWidth(0.25);
-    doc.line(M, y, W - M, y);
-    return y + 4;
+    doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
+    doc.line(M, y, W - M, y); return y + 4;
   }
   function footer(pageNum, totalPages) {
-    doc.setFillColor(10, 11, 15);
-    doc.rect(0, 287, W, 10, 'F');
-    doc.setDrawColor(...C.border);
-    doc.setLineWidth(0.25);
-    doc.line(0, 287, W, 287);
-    doc.setTextColor(...C.t2);
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'normal');
+    doc.setFillColor(10, 11, 15); doc.rect(0, 287, W, 10, 'F');
+    doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.line(0, 287, W, 287);
+    doc.setTextColor(...C.t2); doc.setFontSize(6.5); doc.setFont('helvetica', 'normal');
     doc.text('DeepScan -- AI Deepfake Detection  |  CNN-only pipeline  |  For informational purposes only', M, 293);
     doc.setTextColor(...C.blue);
     doc.text(`Page ${pageNum} of ${totalPages}`, W - M, 293, { align: 'right' });
@@ -979,858 +927,134 @@ function makeHelpers(doc, C, W, M) {
   return { fillBg, sectionHead, chip, prose, hr, footer, safeStr, T };
 }
 
-// ═════════════════════════════════════════════════════════════
-//  IMAGE PDF — CNN-only, no Sightengine rows
-//  *** UNCHANGED — exactly as original ***
-// ═════════════════════════════════════════════════════════════
 async function buildImagePDF(jsPDF, result) {
-  const doc      = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const C        = palette();
-  const W = 210, M = 16;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const C = palette(); const W = 210, M = 16;
   const { fillBg, sectionHead, chip, prose, hr, footer } = makeHelpers(doc, C, W, M);
-
-  const verdict  = result.verdict  || 'unknown';
-  const fakeProb = parseFloat(result.fake_probability) || 0;
-  const isFake   = verdict === 'fake';
-  const isDemo   = !!result._demo;
-  const verdictC = isFake ? C.fake : C.real;
-  const fileName = selectedFile ? selectedFile.name : 'unknown';
-  const now      = new Date().toLocaleString();
-  const groqKey  = getGroqKey();
-
-  // ── Groq sections ──────────────────────────────────────────
-  const introPrompt =
-`You are a professional forensic AI analyst writing a formal deepfake detection report for a non-technical audience.
-Pipeline: CNN-only (MobileNetV2 deepfake_model.h5). fake_prob = 1 - raw_sigmoid. Threshold: 50%.
-Verdict: ${verdict.toUpperCase()}. Fake probability: ${(fakeProb * 100).toFixed(1)}%.
-CNN: ${(result.cnn_label || '?').toUpperCase()} at ${result.cnn_confidence != null ? (result.cnn_confidence * 100).toFixed(1) + '%' : 'unknown'}.
-Write exactly 3 professional plain-prose sentences (no bullet points, no headings):
-1. State the verdict and overall confidence clearly.
-2. Describe what CNN signals drove this result.
-3. Add one sentence of caveats or recommendations.`;
-
-  const introCopy = await groqWriteSection(introPrompt, groqKey,
-    `This image has been assessed as ${verdict.toUpperCase()} with a fake probability of ${(fakeProb * 100).toFixed(1)}% by the CNN pipeline. ` +
-    `The MobileNetV2 model analysed pixel-level patterns and produced an inverted sigmoid score to derive the fake probability. ` +
-    `Results should be interpreted alongside human review for high-stakes decisions.`
-  );
-
-  const techPrompt =
-`You are a computer-vision deepfake expert writing the technical section of a PDF report.
-CNN label: ${(result.cnn_label || '?').toUpperCase()}, confidence ${result.cnn_confidence != null ? (result.cnn_confidence * 100).toFixed(1) + '%' : 'unknown'}.
-Ensemble fake probability: ${(fakeProb * 100).toFixed(1)}%. Threshold: 50%. Pipeline: CNN-only.
-Write 3-4 plain-prose sentences explaining the CNN signal, likely visual artefacts observed, and the inverted-sigmoid scoring. No bullets, no headings.`;
-
-  const techCopy = await groqWriteSection(techPrompt, groqKey,
-    `The CNN model evaluated pixel-level patterns using a MobileNetV2 architecture trained on deepfake datasets. ` +
-    `The raw sigmoid output was inverted (fake_prob = 1 − sigmoid) to derive the fake probability of ${(fakeProb * 100).toFixed(1)}%. ` +
-    `This ${isFake ? 'exceeds' : 'falls below'} the 50% decision threshold.`
-  );
-
-  const recPrompt =
-`You are a digital forensics consultant. An image has been classified as ${verdict.toUpperCase()} (${(fakeProb * 100).toFixed(1)}% fake probability) by a CNN-only pipeline.
-Write exactly 3 short, actionable plain-prose sentences recommending next steps. Be direct and practical. No bullets, no headings.`;
-
-  const recCopy = await groqWriteSection(recPrompt, groqKey,
-    `We recommend cross-verifying this image with a reverse image search and additional forensic tools. ` +
-    `If this image is intended for publication or legal use, obtain a certified forensic review. ` +
-    `A single-model CNN result should not be treated as conclusive without corroborating evidence.`
-  );
-
-  // ── PAGE 1 ─────────────────────────────────────────────────
+  const verdict = result.verdict || 'unknown'; const fakeProb = parseFloat(result.fake_probability) || 0;
+  const isFake = verdict === 'fake'; const isDemo = !!result._demo; const verdictC = isFake ? C.fake : C.real;
+  const fileName = selectedFile ? selectedFile.name : 'unknown'; const now = new Date().toLocaleString();
+  const groqKey = getGroqKey();
+  const introPrompt = `You are a professional forensic AI analyst writing a formal deepfake detection report. Pipeline: CNN-only (MobileNetV2). fake_prob = 1 - raw_sigmoid. Threshold: 50%. Verdict: ${verdict.toUpperCase()}. Fake probability: ${(fakeProb * 100).toFixed(1)}%. Write exactly 3 professional plain-prose sentences: 1. State the verdict and confidence. 2. Describe what CNN signals drove this result. 3. Add one sentence of caveats.`;
+  const introCopy = await groqWriteSection(introPrompt, groqKey, `This image has been assessed as ${verdict.toUpperCase()} with a fake probability of ${(fakeProb * 100).toFixed(1)}% by the CNN pipeline. The MobileNetV2 model analysed pixel-level patterns and produced an inverted sigmoid score. Results should be interpreted alongside human review for high-stakes decisions.`);
+  const techPrompt = `CNN label: ${(result.cnn_label || '?').toUpperCase()}, confidence ${result.cnn_confidence != null ? (result.cnn_confidence * 100).toFixed(1) + '%' : 'unknown'}. Fake prob: ${(fakeProb * 100).toFixed(1)}%. Threshold: 50%. Write 3-4 plain-prose sentences explaining the CNN signal, likely visual artefacts, and the inverted-sigmoid scoring.`;
+  const techCopy = await groqWriteSection(techPrompt, groqKey, `The CNN model evaluated pixel-level patterns using a MobileNetV2 architecture. The raw sigmoid output was inverted (fake_prob = 1 − sigmoid) to derive the fake probability of ${(fakeProb * 100).toFixed(1)}%. This ${isFake ? 'exceeds' : 'falls below'} the 50% decision threshold.`);
+  const recPrompt = `An image classified as ${verdict.toUpperCase()} (${(fakeProb * 100).toFixed(1)}% fake prob). Write exactly 3 short, actionable plain-prose sentences recommending next steps.`;
+  const recCopy = await groqWriteSection(recPrompt, groqKey, `Cross-verify this image with a reverse image search and additional forensic tools. If intended for publication or legal use, obtain a certified forensic review. A single-model CNN result should not be treated as conclusive.`);
   fillBg();
-
-  doc.setFillColor(...C.hdr);
-  doc.rect(0, 0, W, 42, 'F');
-  doc.setFillColor(...verdictC);
-  doc.rect(0, 0, 4, 42, 'F');
-
-  doc.setTextColor(...C.blue);
-  doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DeepScan', M, 16);
-  doc.setTextColor(...C.t2);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('AI Image Authenticity Report  —  CNN-Only Pipeline', M, 24);
-  doc.setFontSize(7.5);
-  doc.text(now, W - M, 13, { align: 'right' });
-
-  if (isDemo) {
-    doc.setFillColor(...C.warn);
-    doc.roundedRect(W - M - 24, 17, 24, 7, 2, 2, 'F');
-    doc.setTextColor(20, 20, 20);
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DEMO', W - M - 12, 22, { align: 'center' });
-  }
-
-  doc.setFillColor(...(isFake ? [55, 18, 18] : [15, 50, 25]));
-  doc.roundedRect(M, 29, 110, 9, 2.5, 2.5, 'F');
-  doc.setDrawColor(...verdictC);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(M, 29, 110, 9, 2.5, 2.5, 'S');
-  doc.setTextColor(...verdictC);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
+  doc.setFillColor(...C.hdr); doc.rect(0, 0, W, 42, 'F');
+  doc.setFillColor(...verdictC); doc.rect(0, 0, 4, 42, 'F');
+  doc.setTextColor(...C.blue); doc.setFontSize(24); doc.setFont('helvetica', 'bold'); doc.text('DeepScan', M, 16);
+  doc.setTextColor(...C.t2); doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.text('AI Image Authenticity Report  —  CNN-Only Pipeline', M, 24);
+  doc.setFontSize(7.5); doc.text(now, W - M, 13, { align: 'right' });
+  if (isDemo) { doc.setFillColor(...C.warn); doc.roundedRect(W - M - 24, 17, 24, 7, 2, 2, 'F'); doc.setTextColor(20,20,20); doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.text('DEMO', W - M - 12, 22, { align:'center' }); }
+  doc.setFillColor(...(isFake ? [55,18,18] : [15,50,25])); doc.roundedRect(M, 29, 110, 9, 2.5, 2.5, 'F');
+  doc.setDrawColor(...verdictC); doc.setLineWidth(0.5); doc.roundedRect(M, 29, 110, 9, 2.5, 2.5, 'S');
+  doc.setTextColor(...verdictC); doc.setFontSize(9); doc.setFont('helvetica','bold');
   doc.text(isFake ? 'FAKE DETECTED — AI-generated or manipulated' : 'AUTHENTIC — No deepfake indicators found', M + 4, 35);
-
   let y = 48;
-
-  // File info bar
-  doc.setFillColor(...C.bg1);
-  doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'F');
-  doc.setDrawColor(...C.border);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'S');
-  [['FILE', M + 4], ['TYPE', M + 90], ['FAKE PROBABILITY', M + 132]].forEach(([lbl, x]) => {
-    doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'bold');
-    doc.text(lbl, x, y + 5.5);
-  });
-  const shortName = fileName.length > 42 ? fileName.slice(0, 39) + '...' : fileName;
-  doc.setTextColor(...C.t0); doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-  doc.text(shortName, M + 4, y + 12);
-  doc.text('IMAGE', M + 90, y + 12);
-  doc.setTextColor(...verdictC); doc.setFont('helvetica', 'bold');
-  doc.text(`${(fakeProb * 100).toFixed(1)}%`, M + 132, y + 12);
+  doc.setFillColor(...C.bg1); doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'F');
+  doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'S');
+  [['FILE', M+4],['TYPE', M+90],['FAKE PROBABILITY', M+132]].forEach(([lbl,x]) => { doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.text(lbl,x,y+5.5); });
+  const shortName = fileName.length > 42 ? fileName.slice(0,39)+'...' : fileName;
+  doc.setTextColor(...C.t0); doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.text(shortName, M+4, y+12); doc.text('IMAGE', M+90, y+12);
+  doc.setTextColor(...verdictC); doc.setFont('helvetica','bold'); doc.text(`${(fakeProb*100).toFixed(1)}%`, M+132, y+12);
   y += 22;
-
-  // Analysed image + verdict panel
   y = sectionHead('ANALYSED IMAGE', y);
   const imgData = lastPreviewUrl ? await loadImageForPDF(lastPreviewUrl) : null;
   if (imgData) {
-    const maxW = 82, maxH = 72;
-    const ratio = imgData.w / imgData.h;
-    let dW = maxW, dH = maxW / ratio;
-    if (dH > maxH) { dH = maxH; dW = maxH * ratio; }
-
-    doc.setDrawColor(...verdictC);
-    doc.setLineWidth(0.8);
-    doc.rect(M, y, dW, dH);
-    doc.addImage(imgData.dataUrl, 'JPEG', M, y, dW, dH);
-
-    const bx = M + dW + 6, bw = W - M - bx;
-    doc.setFillColor(...(isFake ? [50, 15, 15] : [15, 44, 22]));
-    doc.roundedRect(bx, y, bw, dH, 4, 4, 'F');
-    doc.setDrawColor(...verdictC);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(bx, y, bw, dH, 4, 4, 'S');
-
-    let by = y + dH * 0.18;
-    doc.setTextColor(...verdictC); doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text(isFake ? 'FAKE' : 'REAL', bx + bw / 2, by, { align: 'center' }); by += 9;
-    doc.setTextColor(...C.t1); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text('Fake probability', bx + bw / 2, by, { align: 'center' }); by += 6;
-    doc.setTextColor(...verdictC); doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text(`${(fakeProb * 100).toFixed(1)}%`, bx + bw / 2, by, { align: 'center' }); by += 10;
-
-    const barX = bx + 6, barW = bw - 12;
-    doc.setFillColor(...C.bg3); doc.roundedRect(barX, by, barW, 4.5, 2, 2, 'F');
-    doc.setFillColor(...verdictC); doc.roundedRect(barX, by, Math.max(2, fakeProb * barW), 4.5, 2, 2, 'F');
-    by += 10;
-    doc.setTextColor(...C.t2); doc.setFontSize(6);
-    doc.text(`${imgData.w} x ${imgData.h} px`, bx + bw / 2, by, { align: 'center' });
-    y += dH + 8;
+    const maxW=82,maxH=72,ratio=imgData.w/imgData.h; let dW=maxW,dH=maxW/ratio; if(dH>maxH){dH=maxH;dW=maxH*ratio;}
+    doc.setDrawColor(...verdictC); doc.setLineWidth(0.8); doc.rect(M,y,dW,dH); doc.addImage(imgData.dataUrl,'JPEG',M,y,dW,dH);
+    const bx=M+dW+6,bw=W-M-bx; doc.setFillColor(...(isFake?[50,15,15]:[15,44,22])); doc.roundedRect(bx,y,bw,dH,4,4,'F');
+    doc.setDrawColor(...verdictC); doc.setLineWidth(0.4); doc.roundedRect(bx,y,bw,dH,4,4,'S');
+    let by=y+dH*0.18; doc.setTextColor(...verdictC); doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.text(isFake?'FAKE':'REAL',bx+bw/2,by,{align:'center'}); by+=9;
+    doc.setTextColor(...C.t1); doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.text('Fake probability',bx+bw/2,by,{align:'center'}); by+=6;
+    doc.setTextColor(...verdictC); doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.text(`${(fakeProb*100).toFixed(1)}%`,bx+bw/2,by,{align:'center'}); by+=10;
+    const barX=bx+6,barW=bw-12; doc.setFillColor(...C.bg3); doc.roundedRect(barX,by,barW,4.5,2,2,'F'); doc.setFillColor(...verdictC); doc.roundedRect(barX,by,Math.max(2,fakeProb*barW),4.5,2,2,'F'); by+=10;
+    doc.setTextColor(...C.t2); doc.setFontSize(6); doc.text(`${imgData.w} x ${imgData.h} px`,bx+bw/2,by,{align:'center'});
+    y+=dH+8;
   }
-
-  y = sectionHead('EXECUTIVE SUMMARY', y);
-  doc.setFillColor(18, 22, 36);
-  doc.roundedRect(M, y, W - M * 2, 36, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
-  doc.roundedRect(M, y, W - M * 2, 36, 3, 3, 'S');
-  y = prose(introCopy, M + 5, y + 7, W - M * 2 - 10, 7.5, C.t1) + 2;
-  y = Math.max(y, y + 4);
-
-  y += 4;
-  y = sectionHead('FAKE PROBABILITY SCORE', y);
-  const barFull = W - M * 2;
-  doc.setFillColor(...C.bg3); doc.roundedRect(M, y, barFull, 6, 3, 3, 'F');
-  doc.setFillColor(...verdictC); doc.roundedRect(M, y, Math.max(4, fakeProb * barFull), 6, 3, 3, 'F');
-  const thrX = M + FAKE_THRESHOLD * barFull;
-  doc.setDrawColor(...C.warn); doc.setLineWidth(0.6);
-  doc.line(thrX, y - 1, thrX, y + 7);
-  doc.setTextColor(...C.warn); doc.setFontSize(6.5);
-  doc.text('50% threshold', thrX, y + 11, { align: 'center' });
-  doc.setTextColor(...C.t2); doc.setFontSize(6.5);
-  doc.text('0%', M, y + 11); doc.text('100%', W - M, y + 11, { align: 'right' });
-  y += 18;
-
-  // Detection metrics — CNN only (4 chips)
-  y = sectionHead('DETECTION METRICS', y);
-  const metrics = [
-    { label: 'Verdict',        value: verdict.toUpperCase(),                                                                 color: verdictC },
-    { label: 'CNN Label',      value: (result.cnn_label || '-').toUpperCase(),                                               color: C.t0     },
-    { label: 'CNN Confidence', value: result.cnn_confidence != null ? `${(result.cnn_confidence * 100).toFixed(1)}%` : '-', color: C.t0     },
-    { label: 'Fake Prob.',     value: `${(fakeProb * 100).toFixed(1)}%`,                                                    color: verdictC },
-  ];
-  const gap   = 4;
-  const chipW = (W - M * 2 - gap * (metrics.length - 1)) / metrics.length;
-  metrics.forEach((m, i) => chip(M + i * (chipW + gap), y, chipW, 18, m.label, m.value, m.color));
-  y += 26;
-
-  // CNN signal table (no Sightengine row)
-  y = sectionHead('CNN SIGNAL DETAIL', y);
-  const tRows = [
-    { src: 'CNN Neural Network (MobileNetV2)', score: result.cnn_confidence != null ? `${(result.cnn_confidence * 100).toFixed(1)}%` : '-', label: (result.cnn_label || '-').toUpperCase() },
-    { src: 'fake_prob = 1 − sigmoid',          score: `${(fakeProb * 100).toFixed(1)}%`,                                                    label: verdict.toUpperCase(), hl: true },
-  ];
-  doc.setFillColor(...C.bg1); doc.rect(M, y, W - M * 2, 7.5, 'F');
-  [['SOURCE / FORMULA', M + 4], ['SCORE', M + 100], ['LABEL', M + 150]].forEach(([h, x]) => {
-    doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'bold');
-    doc.text(h, x, y + 5.2);
-  });
-  y += 7.5;
-  tRows.forEach((row, ri) => {
-    const rh = 9.5;
-    if (row.hl) { doc.setFillColor(...(isFake ? [48, 16, 16] : [16, 42, 22])); }
-    else        { doc.setFillColor(...(ri % 2 === 0 ? C.bg2 : C.bg3)); }
-    doc.rect(M, y, W - M * 2, rh, 'F');
-    doc.setTextColor(...(row.hl ? C.t0 : C.t1)); doc.setFontSize(row.hl ? 8 : 7.5); doc.setFont('helvetica', row.hl ? 'bold' : 'normal');
-    doc.text(row.src, M + 4, y + 6.5);
-    doc.setTextColor(...(row.hl ? verdictC : C.t0)); doc.setFont('helvetica', row.hl ? 'bold' : 'normal');
-    doc.text(row.score, M + 100, y + 6.5);
-    doc.setTextColor(...(row.label === 'FAKE' ? C.fake : row.label === 'REAL' ? C.real : C.t1));
-    doc.setFont('helvetica', 'bold');
-    doc.text(row.label, M + 150, y + 6.5);
-    y += rh;
-  });
-  doc.setTextColor(...C.t2); doc.setFontSize(6.5); doc.setFont('helvetica', 'italic');
-  doc.text(`Threshold: 0.50  |  ${isFake ? '>= 0.50 → FAKE' : '< 0.50 → REAL'}  |  CNN-only pipeline`, M, y + 6);
-  y += 14;
-
-  // ── PAGE 2 ─────────────────────────────────────────────────
-  doc.addPage();
-  fillBg();
-  doc.setFillColor(...C.hdr); doc.rect(0, 0, W, 16, 'F');
-  doc.setFillColor(...verdictC); doc.rect(0, 0, 4, 16, 'F');
-  doc.setTextColor(...C.blue); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-  doc.text('DeepScan', M, 11);
-  doc.setTextColor(...C.t2); doc.setFontSize(7);
-  doc.text('AI Image Authenticity Report  —  CNN-Only  —  ' + fileName, M + 36, 11);
-  doc.setTextColor(...verdictC); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-  doc.text(verdict.toUpperCase(), W - M, 11, { align: 'right' });
-  y = 22;
-
-  y = sectionHead('TECHNICAL ANALYSIS', y);
-  doc.setFillColor(16, 20, 34);
-  doc.roundedRect(M, y, W - M * 2, 42, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
-  doc.roundedRect(M, y, W - M * 2, 42, 3, 3, 'S');
-  doc.setFillColor(...C.blue); doc.rect(M, y + 4, 2, 34, 'F');
-  y = prose(techCopy, M + 6, y + 8, W - M * 2 - 12, 7.8, C.t1) + 6;
-  y = Math.max(y, y + 4);
-
-  y = sectionHead('COMMON DEEPFAKE VISUAL ARTEFACTS', y);
-  const artItems = [
-    { label: 'Face boundary blending', desc: 'Soft or mismatched edges where the synthetic face meets the original background.' },
-    { label: 'Skin texture anomalies',  desc: 'Over-smoothed or plastic-looking skin, missing pores, unnatural shininess.' },
-    { label: 'Lighting inconsistency',  desc: 'Shadows on the face that do not match the ambient scene lighting direction.' },
-    { label: 'Eye reflections',         desc: 'Incorrect or duplicated catch-lights; glassy or perfectly symmetric irises.' },
-    { label: 'GAN grid artefacts',      desc: 'Subtle repeating pixel patterns (checkerboarding) from generative upsampling.' },
-    { label: 'CNN confidence caveat',   desc: 'CNN confidence below 75% indicates uncertain predictions requiring human review.' },
-  ];
-  const colCount = 2, colW = (W - M * 2 - 6) / colCount, rowH = 18;
-  artItems.forEach((item, idx) => {
-    const col = idx % colCount, row = Math.floor(idx / colCount);
-    const ax = M + col * (colW + 6), ay = y + row * (rowH + 4);
-    doc.setFillColor(...C.bg1); doc.roundedRect(ax, ay, colW, rowH, 2, 2, 'F');
-    doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(ax, ay, colW, rowH, 2, 2, 'S');
-    doc.setFillColor(...((isFake && idx < 5) ? C.fake : C.t2));
-    doc.circle(ax + 5, ay + 5.5, 1.5, 'F');
-    doc.setTextColor(...C.t0); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
-    doc.text(item.label, ax + 10, ay + 6);
-    doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'normal');
-    doc.text(doc.splitTextToSize(item.desc, colW - 12), ax + 10, ay + 11);
-  });
-  y += 3 * (rowH + 4) + 6;
-
-  y = sectionHead('RECOMMENDATIONS & NEXT STEPS', y);
-  doc.setFillColor(16, 24, 20);
-  doc.roundedRect(M, y, W - M * 2, 36, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
-  doc.roundedRect(M, y, W - M * 2, 36, 3, 3, 'S');
-  doc.setFillColor(...C.real); doc.rect(M, y + 4, 2, 28, 'F');
-  y = prose(recCopy, M + 6, y + 8, W - M * 2 - 12, 7.8, C.t1);
-
-  y += 10;
-  y = sectionHead('METHODOLOGY', y);
-  const methodText =
-    `DeepScan uses a fine-tuned MobileNetV2 CNN (deepfake_model.h5) as its sole detection signal. ` +
-    `The model was trained with sigmoid output where HIGH = REAL and LOW = FAKE. To obtain the fake probability, ` +
-    `the raw sigmoid output is inverted: fake_prob = 1.0 − raw_sigmoid. A threshold of 0.50 is applied: ` +
-    `fake_prob >= 0.50 classifies the image as FAKE, otherwise REAL. This report was generated automatically ` +
-    `and should be treated as an analytical aid, not a definitive legal or forensic determination.`;
-  doc.setFillColor(14, 16, 24);
-  doc.roundedRect(M, y, W - M * 2, 40, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.2);
-  doc.roundedRect(M, y, W - M * 2, 40, 3, 3, 'S');
-  y = prose(methodText, M + 5, y + 8, W - M * 2 - 10, 7, C.t2) + 4;
-
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    footer(p, totalPages);
-  }
-
-  const safeName = (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'deepscan') + '_image_report.pdf';
+  y=sectionHead('EXECUTIVE SUMMARY',y);
+  doc.setFillColor(18,22,36); doc.roundedRect(M,y,W-M*2,36,3,3,'F');
+  doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M,y,W-M*2,36,3,3,'S');
+  y=prose(introCopy,M+5,y+7,W-M*2-10,7.5,C.t1)+6;
+  y+=4; y=sectionHead('FAKE PROBABILITY SCORE',y);
+  const barFull=W-M*2; doc.setFillColor(...C.bg3); doc.roundedRect(M,y,barFull,6,3,3,'F'); doc.setFillColor(...verdictC); doc.roundedRect(M,y,Math.max(4,fakeProb*barFull),6,3,3,'F');
+  const thrX=M+FAKE_THRESHOLD*barFull; doc.setDrawColor(...C.warn); doc.setLineWidth(0.6); doc.line(thrX,y-1,thrX,y+7); doc.setTextColor(...C.warn); doc.setFontSize(6.5); doc.text('50% threshold',thrX,y+11,{align:'center'}); doc.setTextColor(...C.t2); doc.setFontSize(6.5); doc.text('0%',M,y+11); doc.text('100%',W-M,y+11,{align:'right'}); y+=18;
+  y=sectionHead('DETECTION METRICS',y);
+  const metrics=[{label:'Verdict',value:verdict.toUpperCase(),color:verdictC},{label:'CNN Label',value:(result.cnn_label||'-').toUpperCase(),color:C.t0},{label:'CNN Confidence',value:result.cnn_confidence!=null?`${(result.cnn_confidence*100).toFixed(1)}%`:'-',color:C.t0},{label:'Fake Prob.',value:`${(fakeProb*100).toFixed(1)}%`,color:verdictC}];
+  const gap=4,chipW=(W-M*2-gap*(metrics.length-1))/metrics.length;
+  metrics.forEach((m,i)=>chip(M+i*(chipW+gap),y,chipW,18,m.label,m.value,m.color)); y+=26;
+  doc.addPage(); fillBg();
+  doc.setFillColor(...C.hdr); doc.rect(0,0,W,16,'F'); doc.setFillColor(...verdictC); doc.rect(0,0,4,16,'F');
+  doc.setTextColor(...C.blue); doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.text('DeepScan',M,11);
+  doc.setTextColor(...C.t2); doc.setFontSize(7); doc.text('AI Image Authenticity Report  —  CNN-Only  —  '+fileName,M+36,11);
+  doc.setTextColor(...verdictC); doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.text(verdict.toUpperCase(),W-M,11,{align:'right'});
+  y=22; y=sectionHead('TECHNICAL ANALYSIS',y);
+  doc.setFillColor(16,20,34); doc.roundedRect(M,y,W-M*2,42,3,3,'F'); doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M,y,W-M*2,42,3,3,'S');
+  doc.setFillColor(...C.blue); doc.rect(M,y+4,2,34,'F');
+  y=prose(techCopy,M+6,y+8,W-M*2-12,7.8,C.t1)+6; y=Math.max(y,y+4);
+  y=sectionHead('RECOMMENDATIONS & NEXT STEPS',y);
+  doc.setFillColor(16,24,20); doc.roundedRect(M,y,W-M*2,36,3,3,'F'); doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M,y,W-M*2,36,3,3,'S');
+  doc.setFillColor(...C.real); doc.rect(M,y+4,2,28,'F');
+  y=prose(recCopy,M+6,y+8,W-M*2-12,7.8,C.t1);
+  const totalPages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){doc.setPage(p);footer(p,totalPages);}
+  const safeName=(selectedFile?selectedFile.name.replace(/\.[^.]+$/,''):'deepscan')+'_image_report.pdf';
   doc.save(safeName);
 }
 
-// ═════════════════════════════════════════════════════════════
-//  VIDEO PDF — FIXED: safeStr and T are now destructured from
-//              makeHelpers (which now returns them).
-// ═════════════════════════════════════════════════════════════
-
-/**
- * Decode a base64 thumbnail and return { dataUrl, w, h, ratio }
- * Falls back to null if anything fails.
- */
 async function decodeThumbnail(b64) {
   if (!b64 || b64.length < 100) return null;
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       try {
-        const w = img.naturalWidth  || img.width  || 160;
-        const h = img.naturalHeight || img.height || 90;
-        const c = document.createElement('canvas');
-        c.width  = w;
-        c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0);
-        resolve({ dataUrl: c.toDataURL('image/jpeg', 0.82), w, h, ratio: w / h });
+        const w=img.naturalWidth||img.width||160,h=img.naturalHeight||img.height||90;
+        const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0);
+        resolve({dataUrl:c.toDataURL('image/jpeg',0.82),w,h,ratio:w/h});
       } catch { resolve(null); }
     };
-    img.onerror = () => resolve(null);
-    img.src = 'data:image/jpeg;base64,' + b64;
+    img.onerror=()=>resolve(null);
+    img.src='data:image/jpeg;base64,'+b64;
   });
 }
 
 async function buildVideoPDF(jsPDF, result) {
-  const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const C    = palette();
-  const W = 210, M = 16;
-  // FIX: destructure safeStr and T from makeHelpers
-  const { fillBg, sectionHead, chip, prose, hr, footer, safeStr, T } = makeHelpers(doc, C, W, M);
-
-  // Convenience alias that matches the original code's usage pattern:
-  // s(val, fallback) === safeStr(val, fallback)
-  function s(val, fallback) {
-    return safeStr(val, fallback !== undefined ? fallback : '');
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const C=palette(); const W=210,M=16;
+  const {fillBg,sectionHead,chip,prose,hr,footer,safeStr,T}=makeHelpers(doc,C,W,M);
+  function s(val,fallback){return safeStr(val,fallback!==undefined?fallback:'');}
+  const verdict=s(result.verdict,'unknown'),fakeProb=parseFloat(result.fake_probability)||0,isFake=verdict==='fake',isDemo=!!result._demo,verdictC=isFake?C.fake:C.real;
+  const frames=Array.isArray(result.frame_results)?result.frame_results:[],fakeFrames=frames.filter(f=>parseFloat(f.fake_prob||0)>=FAKE_THRESHOLD),realFrames=frames.filter(f=>parseFloat(f.fake_prob||0)<FAKE_THRESHOLD);
+  const fileName=selectedFile?s(selectedFile.name):'unknown',now=s(new Date().toLocaleString()),groqKey=getGroqKey(),fakeRatio=frames.length>0?fakeFrames.length/frames.length:0;
+  const thumbCache=[];
+  for(const fr of frames){const t=await decodeThumbnail(fr.thumbnail_b64||'');thumbCache.push(t);}
+  function addContPage(subtitle){
+    doc.addPage();fillBg();doc.setFillColor(...C.hdr);doc.rect(0,0,W,16,'F');doc.setFillColor(...verdictC);doc.rect(0,0,4,16,'F');
+    doc.setTextColor(...C.blue);doc.setFontSize(10);doc.setFont('helvetica','bold');T('DeepScan',M,11);
+    doc.setTextColor(...C.t2);doc.setFontSize(7);const sf=fileName.length>40?fileName.slice(0,37)+'...':fileName;T('Video Report  --  '+s(subtitle)+'  --  '+sf,M+34,11);
+    doc.setTextColor(...verdictC);doc.setFontSize(8);doc.setFont('helvetica','bold');T(verdict.toUpperCase(),W-M,11,{align:'right'});return 22;
   }
-
-  const verdict    = s(result.verdict, 'unknown');
-  const fakeProb   = parseFloat(result.fake_probability) || 0;
-  const isFake     = verdict === 'fake';
-  const isDemo     = !!result._demo;
-  const verdictC   = isFake ? C.fake : C.real;
-  const frames     = Array.isArray(result.frame_results) ? result.frame_results : [];
-  const fakeFrames = frames.filter(f => parseFloat(f.fake_prob || 0) >= FAKE_THRESHOLD);
-  const realFrames = frames.filter(f => parseFloat(f.fake_prob || 0) < FAKE_THRESHOLD);
-  const fileName   = selectedFile ? s(selectedFile.name) : 'unknown';
-  const now        = s(new Date().toLocaleString());
-  const groqKey    = getGroqKey();
-  const fakeRatio  = frames.length > 0 ? fakeFrames.length / frames.length : 0;
-
-  // ── Pre-decode ALL thumbnails so we know their real dimensions ──
-  const thumbCache = [];
-  for (const fr of frames) {
-    const t = await decodeThumbnail(fr.thumbnail_b64 || '');
-    thumbCache.push(t); // null if no thumb
-  }
-
-  // ── addContPage helper ─────────────────────────────────────
-  function addContPage(subtitle) {
-    doc.addPage();
-    fillBg();
-    doc.setFillColor(...C.hdr); doc.rect(0, 0, W, 16, 'F');
-    doc.setFillColor(...verdictC); doc.rect(0, 0, 4, 16, 'F');
-    doc.setTextColor(...C.blue); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    T('DeepScan', M, 11);
-    doc.setTextColor(...C.t2); doc.setFontSize(7);
-    const shortFile = fileName.length > 40 ? fileName.slice(0, 37) + '...' : fileName;
-    T('Video Report  --  ' + s(subtitle) + '  --  ' + shortFile, M + 34, 11);
-    doc.setTextColor(...verdictC); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-    T(verdict.toUpperCase(), W - M, 11, { align: 'right' });
-    return 22;
-  }
-
-  // ── Groq sections ──────────────────────────────────────────
-  const summaryPrompt =
-`You are a senior digital forensics analyst writing a professional video deepfake detection report.
-Pipeline: CNN-only (MobileNetV2). fake_prob = 1 - sigmoid. Threshold: 50%.
-File: ${fileName}. Verdict: ${verdict.toUpperCase()}. Overall fake probability: ${(fakeProb * 100).toFixed(1)}%.
-Frames analysed: ${frames.length}. Fake frames: ${fakeFrames.length} (${(fakeRatio * 100).toFixed(0)}%). Real frames: ${realFrames.length}.
-CNN: ${s(result.cnn_label, '?').toUpperCase()} at ${result.cnn_confidence != null ? (result.cnn_confidence * 100).toFixed(1) + '%' : 'unknown'}.
-Write 4 concise, professional plain-prose sentences for the executive summary.`;
-
-  const summaryText = s(await groqWriteSection(summaryPrompt, groqKey,
-    `This video has been classified as ${verdict.toUpperCase()} with a CNN fake probability of ${(fakeProb * 100).toFixed(1)}%. ` +
-    `Frame-level analysis found ${fakeFrames.length} of ${frames.length} frames (${(fakeRatio * 100).toFixed(0)}%) exhibiting deepfake indicators. ` +
-    `The MobileNetV2 CNN identified face manipulation artefacts consistent with neural face-swapping. ` +
-    `This result warrants further investigation and should not be used as sole evidence without independent verification.`
-  ));
-
-  const techText = s(await groqWriteSection(
-    `Explain the CNN-only video deepfake analysis methodology: ${frames.length} frames sampled, each scored by MobileNetV2 (fake_prob = 1 - sigmoid, threshold 50%). Overall verdict from mean fake_prob. 3-4 plain-prose sentences, no bullets.`,
-    groqKey,
-    `The video was sampled into ${frames.length} frames distributed evenly across its duration, each scored independently by the MobileNetV2 CNN classifier. ` +
-    `The fake probability per frame was derived by inverting the raw sigmoid output (fake_prob = 1 - sigmoid), with 0.50 as the per-frame threshold. ` +
-    `The overall video verdict was derived from the mean fake probability across all sampled frames.`
-  ));
-
-  // Per-frame narratives
-  const frameNarratives = [];
-  for (const fr of frames) {
-    const frProb   = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
-    const frIsFake = frProb >= FAKE_THRESHOLD;
-    const frPrompt =
-`Frame #${s(fr.frame_index)} at ${s(fr.timestamp_sec)}s. CNN verdict: ${frIsFake ? 'FAKE' : 'REAL'}. Fake prob: ${(frProb * 100).toFixed(1)}%. CNN conf: ${fr.cnn_confidence != null ? (fr.cnn_confidence * 100).toFixed(1) + '%' : 'unknown'}. Write exactly 2 plain-prose sentences: 1) state classification and confidence. 2) ${frIsFake ? 'describe likely visual artefacts' : 'describe authentic characteristics detected'}.`;
-    const narrative = await groqWriteSection(frPrompt, groqKey,
-      frIsFake
-        ? `Frame ${s(fr.frame_index)} at ${s(fr.timestamp_sec)}s was flagged with ${(frProb * 100).toFixed(0)}% fake confidence. Visual artefacts including boundary blending were detected.`
-        : `Frame ${s(fr.frame_index)} at ${s(fr.timestamp_sec)}s was assessed as authentic with ${((1 - frProb) * 100).toFixed(0)}% real confidence. Natural facial geometry confirmed.`
-    );
-    frameNarratives.push(s(narrative));
-  }
-
-  const conclusionText = s(await groqWriteSection(
-    `Write 3-4 sentences forensic conclusion for a CNN-only video deepfake report. Verdict: ${verdict.toUpperCase()}, ${(fakeProb * 100).toFixed(1)}% fake prob, ${fakeFrames.length}/${frames.length} fake frames. No bullets.`,
-    groqKey,
-    `Collectively, the frame-level CNN evidence indicates that this video ${isFake ? 'has been manipulated using AI-based face synthesis technology' : 'does not exhibit significant AI manipulation indicators'}. ` +
-    `The automated CNN-only pipeline provides a strong probabilistic assessment but cannot substitute for expert human review in high-stakes contexts. ` +
-    `We recommend certified forensic analysis if legal or evidentiary use is intended.`
-  ));
-
-  // ── PAGE 1 ─────────────────────────────────────────────────
-  fillBg();
-  doc.setFillColor(...C.hdr); doc.rect(0, 0, W, 50, 'F');
-  doc.setFillColor(...verdictC); doc.rect(0, 0, 4, 50, 'F');
-  doc.setTextColor(...C.blue); doc.setFontSize(28); doc.setFont('helvetica', 'bold');
-  T('DeepScan', M, 18);
-  doc.setTextColor(...C.t2); doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-  T('AI Video Deepfake Analysis Report  --  CNN-Only Pipeline', M, 27);
-  doc.setFontSize(7.5);
-  T(now, W - M, 14, { align: 'right' });
-
-  doc.setFillColor(...(isFake ? [65, 20, 20] : [18, 58, 28]));
-  doc.roundedRect(M, 33, W - M * 2, 13, 3, 3, 'F');
-  doc.setDrawColor(...verdictC); doc.setLineWidth(0.6);
-  doc.roundedRect(M, 33, W - M * 2, 13, 3, 3, 'S');
-  doc.setTextColor(...verdictC); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-  T(isFake ? 'DEEPFAKE DETECTED' : 'AUTHENTIC VIDEO', M + 6, 41);
-  doc.setTextColor(...C.t1); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  const shortFN = fileName.length > 40 ? fileName.slice(0, 37) + '...' : fileName;
-  T('CNN fake probability: ' + (fakeProb * 100).toFixed(1) + '%  |  Frames: ' + fakeFrames.length + '/' + frames.length + ' flagged  |  ' + shortFN, M + 6, 46.5);
-
-  if (isDemo) {
-    doc.setFillColor(...C.warn); doc.roundedRect(W - M - 26, 34, 26, 8, 2, 2, 'F');
-    doc.setTextColor(20, 20, 20); doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
-    T('DEMO MODE', W - M - 13, 39.5, { align: 'center' });
-  }
-
-  let y = 56;
-
-  const sumItems = [
-    { label: 'Verdict',      value: verdict.toUpperCase(),                color: verdictC },
-    { label: 'Fake Prob.',   value: (fakeProb * 100).toFixed(1) + '%',   color: verdictC },
-    { label: 'Total Frames', value: s(frames.length),                    color: C.t0     },
-    { label: 'Fake Frames',  value: s(fakeFrames.length),                color: fakeFrames.length > 0 ? C.fake : C.t0 },
-    { label: 'Real Frames',  value: s(realFrames.length),                color: C.real   },
-    { label: 'Fake Ratio',   value: (fakeRatio * 100).toFixed(0) + '%',  color: verdictC },
-  ];
-  const chipW2 = (W - M * 2 - 3 * 5) / 6;
-  sumItems.forEach((si, i) => chip(M + i * (chipW2 + 3), y, chipW2, 18, si.label, si.value, si.color));
-  y += 26;
-
-  y = sectionHead('EXECUTIVE SUMMARY', y);
-  doc.setFillColor(16, 18, 28); doc.roundedRect(M, y, W - M * 2, 44, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M, y, W - M * 2, 44, 3, 3, 'S');
-  doc.setFillColor(...verdictC); doc.rect(M, y + 4, 2.5, 36, 'F');
-  prose(summaryText, M + 7, y + 8, W - M * 2 - 12, 8, C.t1);
-  y += 52;
-
-  y = sectionHead('OVERALL FAKE PROBABILITY (CNN)', y);
-  const bFull = W - M * 2;
-  doc.setFillColor(...C.bg3); doc.roundedRect(M, y, bFull, 7, 3, 3, 'F');
-  if (fakeProb > 0) {
-    doc.setFillColor(...verdictC);
-    doc.roundedRect(M, y, Math.max(4, fakeProb * bFull), 7, 3, 3, 'F');
-  }
-  const thrX2 = M + FAKE_THRESHOLD * bFull;
-  doc.setDrawColor(...C.warn); doc.setLineWidth(0.7);
-  doc.line(thrX2, y - 1, thrX2, y + 8);
-  doc.setTextColor(...C.warn); doc.setFontSize(6.5);
-  T('50% threshold', thrX2, y + 13, { align: 'center' });
-  doc.setTextColor(...C.t2); doc.setFontSize(6.5);
-  T('0%', M, y + 13);
-  T('100%', W - M, y + 13, { align: 'right' });
-  y += 20;
-
-  y = sectionHead('TECHNICAL ANALYSIS METHODOLOGY', y);
-  doc.setFillColor(14, 18, 30); doc.roundedRect(M, y, W - M * 2, 38, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M, y, W - M * 2, 38, 3, 3, 'S');
-  doc.setFillColor(...C.blue); doc.rect(M, y + 4, 2.5, 30, 'F');
-  prose(techText, M + 7, y + 8, W - M * 2 - 12, 7.8, C.t1);
-  y += 46;
-
-  y = sectionHead('CNN MODEL RESULTS', y);
-  const modelMetrics = [
-    { label: 'CNN Label',      value: s(result.cnn_label, '-').toUpperCase(),                                                         color: C.t0   },
-    { label: 'CNN Confidence', value: result.cnn_confidence != null ? (result.cnn_confidence * 100).toFixed(1) + '%' : '-',          color: C.t0   },
-    { label: 'Threshold',      value: '50.0%',                                                                                        color: C.warn },
-  ];
-  const mChipW = (W - M * 2 - 2 * 6) / 3;
-  modelMetrics.forEach((m, i) => chip(M + i * (mChipW + 6), y, mChipW, 18, m.label, m.value, m.color));
-  y += 26;
-
-  // ── PAGE 2 — Timeline ──────────────────────────────────────
-  y = addContPage('Probability Timeline');
-  y = sectionHead('CNN FAKE PROBABILITY TIMELINE -- FRAME BY FRAME', y);
-  const cH = 60, cW2 = W - M * 2;
-  doc.setFillColor(...C.bg1); doc.roundedRect(M, y, cW2, cH, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.2);
-  for (let gi = 1; gi < 4; gi++) {
-    const gy = y + cH * (gi / 4);
-    doc.line(M + 2, gy, M + cW2 - 2, gy);
-  }
-  const thrY3 = y + cH * (1 - FAKE_THRESHOLD);
-  doc.setDrawColor(...C.warn); doc.setLineWidth(0.5);
-  doc.setLineDashPattern([3, 3], 0);
-  doc.line(M + 2, thrY3, M + cW2 - 2, thrY3);
-  doc.setLineDashPattern([], 0);
-  doc.setTextColor(...C.warn); doc.setFontSize(5.5);
-  T('50%', M + cW2 - 3, thrY3 - 1.5, { align: 'right' });
-  if (frames.length > 0) {
-    const bw3 = (cW2 - 4) / frames.length;
-    frames.forEach((fr, i) => {
-      const prob     = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
-      const frIsFake = prob >= FAKE_THRESHOLD;
-      const bh  = prob * (cH - 4);
-      const bx3 = M + 2 + i * bw3;
-      const by3 = y + cH - 2 - bh;
-      doc.setFillColor(...(frIsFake ? C.fake : C.real));
-      if (bh > 0) doc.rect(bx3, by3, Math.max(0.5, bw3 - 0.6), bh, 'F');
-    });
-  }
-  doc.setTextColor(...C.t2); doc.setFontSize(5.5); doc.setFont('helvetica', 'normal');
-  T('100%', M - 1, y + 4, { align: 'right' });
-  T('50%', M - 1, y + cH / 2, { align: 'right' });
-  T('0%', M - 1, y + cH, { align: 'right' });
-  if (frames.length > 0) {
-    const bw3 = (cW2 - 4) / frames.length;
-    [0, Math.floor(frames.length / 2), frames.length - 1].forEach(i => {
-      if (frames[i] !== undefined) {
-        const fx = M + 2 + i * bw3 + bw3 / 2;
-        T(s(frames[i].timestamp_sec) + 's', fx, y + cH + 5, { align: 'center' });
-      }
-    });
-  }
-  y += cH + 12;
-  doc.setFillColor(...C.fake); doc.rect(M, y, 8, 4, 'F');
-  doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'normal');
-  T('Fake (>=50%)', M + 10, y + 3.5);
-  doc.setFillColor(...C.real); doc.rect(M + 40, y, 8, 4, 'F');
-  T('Real (<50%)', M + 52, y + 3.5);
-  y += 12;
-
-  // ── PAGES 3+ — Per-frame cards (FIXED aspect-ratio-aware) ──
-  y = addContPage('Frame-by-Frame Analysis');
-  y = sectionHead('COMPLETE FRAME ANALYSIS -- ALL ' + frames.length + ' FRAMES', y);
-
-  // Layout constants
-  const COLS        = 2;
-  const GAP         = 5;
-  const CARD_W      = (W - M * 2 - GAP * (COLS - 1)) / COLS;
-  // INFO_H_BASE: fixed area for header row + 2 metric chips + prob bar (no narrative)
-  // narrative text height is added dynamically per row
-  const INFO_H_BASE   = 42;        // slightly more padding for header+chips+bar
-const NAR_FONT_SZ   = 5.8;
-const NAR_LINE_H    = 4.2;       // fixed line height in mm (more reliable than formula)
-const MAX_NAR_LINES = 4;
-const NAR_MAX_W     = CARD_W - 8;
-  const PAGE_BOTTOM = 278;  // safe bottom margin
-
-  /**
-   * Compute the rendered thumbnail dimensions for a card of width CARD_W,
-   * preserving the actual pixel aspect ratio of the frame.
-   * Falls back to 16:9 when no thumb is available.
-   */
-  function thumbDims(thumbData) {
-    const maxThumbH = 75; // max thumbnail height in mm
-    if (thumbData && thumbData.ratio && isFinite(thumbData.ratio)) {
-      const h = CARD_W / thumbData.ratio;
-      return { w: CARD_W, h: Math.min(h, maxThumbH) };
-    }
-    // fallback: 16:9
-    return { w: CARD_W, h: Math.min(CARD_W * 9 / 16, maxThumbH) };
-  }
-
-  /**
-   * Calculate how tall the info section will be for a given narrative string.
-   * Uses jsPDF's splitTextToSize to get the real line count, capped at MAX_NAR_LINES.
-   */
-  function calcInfoH(narrative) {
-  if (!narrative) return INFO_H_BASE + 4;
-  doc.setFontSize(NAR_FONT_SZ);
-  doc.setFont('helvetica', 'normal');
-  const lines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
-  const visibleLines = Math.min(lines.length, MAX_NAR_LINES);
-  const narH = visibleLines * NAR_LINE_H + 10; // 10 = top gap + bottom padding
-  return INFO_H_BASE + narH;
-}
-
-  for (let i = 0; i < frames.length; i += COLS) {
-    // Gather cards for this row (up to COLS)
-    const rowCards = [];
-    for (let c = 0; c < COLS && i + c < frames.length; c++) {
-      const idx   = i + c;
-      const fr    = frames[idx];
-      const td    = thumbCache[idx];
-      const dims  = thumbDims(td);
-      const narr  = s(frameNarratives[idx]);
-      rowCards.push({ idx, fr, td, dims, narr });
-    }
-
-    // Row thumb height = tallest thumbnail in row (so both cards align)
-    const rowThumbH = Math.max(...rowCards.map(rc => rc.dims.h));
-    // Row info height = tallest info section in row (so card bottoms align)
-    const rowInfoH  = Math.max(...rowCards.map(rc => calcInfoH(rc.narr)));
-    const CARD_H    = rowThumbH + rowInfoH;
-
-    // Page break check
-    if (y + CARD_H > PAGE_BOTTOM) {
-      y = addContPage('Frame-by-Frame Analysis (continued)');
-      y = sectionHead('FRAME ANALYSIS CONTINUED', y);
-    }
-
-    // Draw each card in this row
-    for (let c = 0; c < rowCards.length; c++) {
-      const { idx, fr, td, dims, narr } = rowCards[c];
-      const prob     = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
-      const frIsFake = prob >= FAKE_THRESHOLD;
-      const fColor   = frIsFake ? C.fake : C.real;
-      const narrative = narr;
-
-      const cx = M + c * (CARD_W + GAP);
-      const cy = y;
-
-      // Card background
-      doc.setFillColor(...(frIsFake ? [32, 12, 12] : [12, 28, 16]));
-      doc.roundedRect(cx, cy, CARD_W, CARD_H, 3, 3, 'F');
-      doc.setDrawColor(...fColor); doc.setLineWidth(0.5);
-      doc.roundedRect(cx, cy, CARD_W, CARD_H, 3, 3, 'S');
-
-      // ── Thumbnail area (always rowThumbH tall) ──
-      if (td && td.dataUrl) {
-        const availW = CARD_W;
-        const availH = rowThumbH;
-        let dW = availW;
-        let dH = availW / td.ratio;
-        if (dH > availH) { dH = availH; dW = availH * td.ratio; }
-        if (dW > availW) { dW = availW; dH = availW / td.ratio; }
-
-        const offX = cx + (availW - dW) / 2;
-        const offY = cy + (availH - dH) / 2;
-
-        doc.setFillColor(0, 0, 0);
-        doc.rect(cx, cy, CARD_W, rowThumbH, 'F');
-
-        try {
-          doc.addImage(td.dataUrl, 'JPEG', offX, offY, dW, dH);
-        } catch (_) {
-          doc.setFillColor(...C.bg3);
-          doc.rect(cx, cy, CARD_W, rowThumbH, 'F');
-          doc.setTextColor(...fColor); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-          T((prob * 100).toFixed(0) + '% ' + (frIsFake ? 'FAKE' : 'REAL'),
-            cx + CARD_W / 2, cy + rowThumbH / 2, { align: 'center' });
-        }
-
-        // Badge top-left
-        doc.setFillColor(...(frIsFake ? [180, 20, 20] : [20, 130, 50]));
-        doc.roundedRect(cx + 2, cy + 2, frIsFake ? 14 : 12, 6, 1.5, 1.5, 'F');
-        doc.setTextColor(255, 255, 255); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
-        T(frIsFake ? 'FAKE' : 'REAL', cx + (frIsFake ? 9 : 8), cy + 6, { align: 'center' });
-
-        // Prob badge bottom-right
-        doc.setFillColor(0, 0, 0);
-        doc.roundedRect(cx + CARD_W - 18, cy + rowThumbH - 8, 16, 7, 1.5, 1.5, 'F');
-        doc.setTextColor(...fColor); doc.setFontSize(6); doc.setFont('helvetica', 'bold');
-        T((prob * 100).toFixed(0) + '%',
-          cx + CARD_W - 10, cy + rowThumbH - 3, { align: 'center' });
-
-      } else {
-        // No thumbnail — styled placeholder preserving rowThumbH
-        doc.setFillColor(...C.bg2);
-        doc.rect(cx, cy, CARD_W, rowThumbH, 'F');
-        doc.setDrawColor(...fColor); doc.setLineWidth(0.3);
-        doc.rect(cx + 2, cy + 2, CARD_W - 4, rowThumbH - 4);
-        const midX = cx + CARD_W / 2, midY = cy + rowThumbH / 2;
-        doc.setFillColor(...(frIsFake ? [80, 20, 20] : [20, 60, 30]));
-        doc.circle(midX, midY, 12, 'F');
-        doc.setDrawColor(...fColor); doc.setLineWidth(1.2); doc.circle(midX, midY, 12, 'S');
-        doc.setTextColor(...fColor); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-        T((prob * 100).toFixed(0) + '%', midX, midY + 3, { align: 'center' });
-        doc.setTextColor(...C.t1); doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
-        T(frIsFake ? 'FAKE' : 'REAL', midX, midY + 16, { align: 'center' });
-        doc.setTextColor(...C.t2); doc.setFontSize(5.5); doc.setFont('helvetica', 'normal');
-        T('Frame #' + s(fr.frame_index) + '  .  ' + s(fr.timestamp_sec) + 's',
-          midX, cy + rowThumbH - 5, { align: 'center' });
-      }
-
-      // ── Info area below thumbnail ──
-      let iy = cy + rowThumbH + 4;
-
-      // Frame index + timestamp
-      doc.setTextColor(...C.t0); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
-      T('#' + s(fr.frame_index), cx + 3, iy + 4);
-      doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'normal');
-      const idxW = doc.getTextWidth('#' + s(fr.frame_index));
-      T('@ ' + s(fr.timestamp_sec) + 's', cx + 3 + idxW + 2, iy + 4);
-
-      // Verdict pill
-      const pillW = frIsFake ? 12 : 10;
-      doc.setFillColor(...(frIsFake ? [160, 30, 30] : [30, 120, 50]));
-      doc.roundedRect(cx + CARD_W - pillW - 3, iy, pillW, 6, 1.5, 1.5, 'F');
-      doc.setTextColor(255, 255, 255); doc.setFontSize(4.5); doc.setFont('helvetica', 'bold');
-      T(frIsFake ? 'FAKE' : 'REAL', cx + CARD_W - pillW / 2 - 3, iy + 4.2, { align: 'center' });
-      iy += 8;
-
-      // 2 metric chips
-      const metW = (CARD_W - 6) / 2;
-      const metDefs = [
-        { lbl: 'CNN Conf.',  val: fr.cnn_confidence != null ? (fr.cnn_confidence * 100).toFixed(0) + '%' : '-', col: C.t1   },
-        { lbl: 'Fake Prob.', val: (prob * 100).toFixed(0) + '%',                                                 col: fColor },
-      ];
-      metDefs.forEach((m, mi) => {
-        const mx = cx + 3 + mi * metW;
-        const mw = metW - 1;
-        doc.setFillColor(...C.bg3); doc.roundedRect(mx, iy, mw, 10, 1.5, 1.5, 'F');
-        doc.setTextColor(...C.t2); doc.setFontSize(4.5); doc.setFont('helvetica', 'bold');
-        T(s(m.lbl), mx + mw / 2, iy + 3.5, { align: 'center' });
-        doc.setTextColor(...m.col); doc.setFontSize(6.5); doc.setFont('helvetica', 'bold');
-        T(s(m.val), mx + mw / 2, iy + 8.5, { align: 'center' });
-      });
-      iy += 13;
-
-      // Probability bar with threshold tick
-      const pbW = CARD_W - 6;
-      doc.setFillColor(...C.bg3); doc.roundedRect(cx + 3, iy, pbW, 3, 1.5, 1.5, 'F');
-      if (prob > 0) {
-        doc.setFillColor(...fColor);
-        doc.roundedRect(cx + 3, iy, Math.max(1.5, prob * pbW), 3, 1.5, 1.5, 'F');
-      }
-      const tickX = cx + 3 + FAKE_THRESHOLD * pbW;
-      doc.setDrawColor(...C.warn); doc.setLineWidth(0.4);
-      doc.line(tickX, iy - 1, tickX, iy + 4);
-      iy += 6;
-
-      // Narrative text (max 4 lines) — font size matches calcInfoH's NAR_FONT_SZ
-      // AFTER (fixed) — use doc.text() directly with array, never T():
-if (narrative) {
-  doc.setTextColor(...C.t1);
-  doc.setFontSize(NAR_FONT_SZ);
-  doc.setFont('helvetica', 'normal');
-  const narLines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
-  if (narLines && narLines.length > 0) {
-    const visLines = narLines.slice(0, MAX_NAR_LINES);
-    // Use doc.text() directly — it handles string arrays correctly (one line per element)
-    doc.text(visLines, cx + 4, iy + 4);
-  }
-}
-    } // end of column loop
-
-    // Advance y by the row height
-    y += CARD_H + GAP;
-  } // end of frame loop
-
-  // ── Frame data table ───────────────────────────────────────
-  y = addContPage('Complete Frame Data Table');
-  y = sectionHead('COMPLETE FRAME ANALYSIS TABLE', y);
-
-  const tCols2 = [
-    { label: 'FRAME',      x: M + 2   },
-    { label: 'TIME',       x: M + 22  },
-    { label: 'VERDICT',    x: M + 46  },
-    { label: 'CNN CONF.',  x: M + 80  },
-    { label: 'FAKE PROB.', x: M + 114 },
-    { label: 'CNN LABEL',  x: M + 148 },
-  ];
-
-  function drawTableHeader(yy) {
-    doc.setFillColor(...C.bg1); doc.rect(M, yy, W - M * 2, 8, 'F');
-    tCols2.forEach(c => {
-      doc.setTextColor(...C.t2); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
-      T(s(c.label), c.x, yy + 5.5);
-    });
-    return yy + 8;
-  }
-
-  y = drawTableHeader(y);
-
-  frames.forEach((fr, ri) => {
-    if (y > PAGE_BOTTOM) {
-      y = addContPage('Frame Table (continued)');
-      y = drawTableHeader(y);
-    }
-
-    const prob     = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
-    const frIsFake = prob >= FAKE_THRESHOLD;
-    const fColor   = frIsFake ? C.fake : C.real;
-
-    doc.setFillColor(...(frIsFake
-      ? (ri % 2 === 0 ? [40, 14, 14] : [34, 12, 12])
-      : (ri % 2 === 0 ? C.bg2 : C.bg3)));
-    doc.rect(M, y, W - M * 2, 7.5, 'F');
-
-    const cells = [
-      { col: tCols2[0], text: s(fr.frame_index, '-'),                                                                   color: C.t2   },
-      { col: tCols2[1], text: s(fr.timestamp_sec) + 's',                                                                color: C.t1   },
-      { col: tCols2[2], text: frIsFake ? 'FAKE' : 'REAL',                                                               color: fColor },
-      { col: tCols2[3], text: fr.cnn_confidence != null ? (fr.cnn_confidence * 100).toFixed(1) + '%' : '-',             color: C.t1   },
-      { col: tCols2[4], text: (prob * 100).toFixed(1) + '%',                                                            color: fColor },
-      { col: tCols2[5], text: s(fr.cnn_label, '-').toUpperCase(),                                                       color: C.t2   },
-    ];
-    cells.forEach(({ col, text, color }) => {
-      doc.setTextColor(...color); doc.setFontSize(6.2); doc.setFont('helvetica', 'normal');
-      T(s(text), col.x, y + 5.2);
-    });
-    y += 7.5;
-  });
-  y += 8;
-
-  // ── Final page — Conclusion ────────────────────────────────
-  if (y + 90 > PAGE_BOTTOM) {
-    y = addContPage('Forensic Conclusion');
-  }
-
-  y = sectionHead('FORENSIC CONCLUSION', y);
-  doc.setFillColor(16, 20, 30); doc.roundedRect(M, y, W - M * 2, 44, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.25); doc.roundedRect(M, y, W - M * 2, 44, 3, 3, 'S');
-  doc.setFillColor(...verdictC); doc.rect(M, y + 4, 2.5, 36, 'F');
-  prose(conclusionText, M + 7, y + 8, W - M * 2 - 12, 8, C.t1);
-  y += 52;
-
-  y = sectionHead('METHODOLOGY & DISCLAIMER', y);
-  const methodText2 =
-    'DeepScan uses a fine-tuned MobileNetV2 CNN (deepfake_model.h5) as its sole detection signal. ' +
-    'The model was trained with sigmoid output where HIGH = REAL and LOW = FAKE. ' +
-    'Fake probability is derived as: fake_prob = 1.0 - raw_sigmoid. ' +
-    'For video, ' + frames.length + ' frames were sampled evenly and scored individually; the overall verdict is the mean fake_prob across all frames. ' +
-    'The decision threshold is 0.50 for both image and video. ' +
-    'This report is generated automatically and is intended as an analytical aid only. ' +
-    'It does not constitute a legal or certified forensic determination. ' +
-    'Recipients are advised to seek qualified human expert review for high-stakes applications.';
-  doc.setFillColor(12, 14, 22); doc.roundedRect(M, y, W - M * 2, 52, 3, 3, 'F');
-  doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, y, W - M * 2, 52, 3, 3, 'S');
-  prose(methodText2, M + 5, y + 7, W - M * 2 - 10, 7, C.t2);
-
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    footer(p, totalPages);
-  }
-
-  const safeName = (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'deepscan') + '_video_report.pdf';
+  const summaryText=s(await groqWriteSection(`Senior forensic analyst writing executive summary. Video: ${fileName}. Verdict: ${verdict.toUpperCase()}. Fake prob: ${(fakeProb*100).toFixed(1)}%. Frames: ${frames.length}. Fake frames: ${fakeFrames.length} (${(fakeRatio*100).toFixed(0)}%). Write 4 concise professional sentences.`,groqKey,`This video has been classified as ${verdict.toUpperCase()} with a CNN fake probability of ${(fakeProb*100).toFixed(1)}%. Frame-level analysis found ${fakeFrames.length} of ${frames.length} frames exhibiting deepfake indicators. The MobileNetV2 CNN identified face manipulation artefacts. This result warrants further investigation.`));
+  const techText=s(await groqWriteSection(`Explain CNN-only video deepfake analysis: ${frames.length} frames, MobileNetV2, fake_prob=1-sigmoid, threshold 50%. 3-4 plain-prose sentences.`,groqKey,`The video was sampled into ${frames.length} frames, each scored independently by the MobileNetV2 CNN. The fake probability per frame was derived by inverting the raw sigmoid output. The overall verdict was derived from the mean fake probability across all sampled frames.`));
+  const frameNarratives=[];
+  for(const fr of frames){const frProb=clamp(parseFloat(fr.fake_prob||0),0,1),frIsFake=frProb>=FAKE_THRESHOLD;const narrative=await groqWriteSection(`Frame #${s(fr.frame_index)} at ${s(fr.timestamp_sec)}s. CNN verdict: ${frIsFake?'FAKE':'REAL'}. Fake prob: ${(frProb*100).toFixed(1)}%. Write exactly 2 plain-prose sentences.`,groqKey,frIsFake?`Frame ${s(fr.frame_index)} was flagged with ${(frProb*100).toFixed(0)}% fake confidence. Visual artefacts including boundary blending were detected.`:`Frame ${s(fr.frame_index)} was assessed as authentic with ${((1-frProb)*100).toFixed(0)}% real confidence. Natural facial geometry confirmed.`);frameNarratives.push(s(narrative));}
+  const conclusionText=s(await groqWriteSection(`Forensic conclusion for CNN-only video deepfake report. Verdict: ${verdict.toUpperCase()}, ${(fakeProb*100).toFixed(1)}% fake prob, ${fakeFrames.length}/${frames.length} fake frames. 3-4 sentences.`,groqKey,`The frame-level CNN evidence indicates this video ${isFake?'has been manipulated using AI-based face synthesis':'does not exhibit significant AI manipulation indicators'}. The automated CNN-only pipeline provides a strong probabilistic assessment but cannot substitute for expert human review. Certified forensic analysis is recommended for legal or evidentiary use.`));
+  fillBg();doc.setFillColor(...C.hdr);doc.rect(0,0,W,50,'F');doc.setFillColor(...verdictC);doc.rect(0,0,4,50,'F');
+  doc.setTextColor(...C.blue);doc.setFontSize(28);doc.setFont('helvetica','bold');T('DeepScan',M,18);
+  doc.setTextColor(...C.t2);doc.setFontSize(9);doc.setFont('helvetica','normal');T('AI Video Deepfake Analysis Report  --  CNN-Only Pipeline',M,27);doc.setFontSize(7.5);T(now,W-M,14,{align:'right'});
+  doc.setFillColor(...(isFake?[65,20,20]:[18,58,28]));doc.roundedRect(M,33,W-M*2,13,3,3,'F');doc.setDrawColor(...verdictC);doc.setLineWidth(0.6);doc.roundedRect(M,33,W-M*2,13,3,3,'S');
+  doc.setTextColor(...verdictC);doc.setFontSize(13);doc.setFont('helvetica','bold');T(isFake?'DEEPFAKE DETECTED':'AUTHENTIC VIDEO',M+6,41);
+  doc.setTextColor(...C.t1);doc.setFontSize(8);doc.setFont('helvetica','normal');const shortFN=fileName.length>40?fileName.slice(0,37)+'...':fileName;T('CNN fake probability: '+(fakeProb*100).toFixed(1)+'%  |  Frames: '+fakeFrames.length+'/'+frames.length+' flagged  |  '+shortFN,M+6,46.5);
+  if(isDemo){doc.setFillColor(...C.warn);doc.roundedRect(W-M-26,34,26,8,2,2,'F');doc.setTextColor(20,20,20);doc.setFontSize(6.5);doc.setFont('helvetica','bold');T('DEMO MODE',W-M-13,39.5,{align:'center'});}
+  let y=56;
+  const sumItems=[{label:'Verdict',value:verdict.toUpperCase(),color:verdictC},{label:'Fake Prob.',value:(fakeProb*100).toFixed(1)+'%',color:verdictC},{label:'Total Frames',value:s(frames.length),color:C.t0},{label:'Fake Frames',value:s(fakeFrames.length),color:fakeFrames.length>0?C.fake:C.t0},{label:'Real Frames',value:s(realFrames.length),color:C.real},{label:'Fake Ratio',value:(fakeRatio*100).toFixed(0)+'%',color:verdictC}];
+  const chipW2=(W-M*2-3*5)/6;sumItems.forEach((si,i)=>chip(M+i*(chipW2+3),y,chipW2,18,si.label,si.value,si.color));y+=26;
+  y=sectionHead('EXECUTIVE SUMMARY',y);doc.setFillColor(16,18,28);doc.roundedRect(M,y,W-M*2,44,3,3,'F');doc.setDrawColor(...C.border);doc.setLineWidth(0.25);doc.roundedRect(M,y,W-M*2,44,3,3,'S');doc.setFillColor(...verdictC);doc.rect(M,y+4,2.5,36,'F');prose(summaryText,M+7,y+8,W-M*2-12,8,C.t1);y+=52;
+  const totalPages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){doc.setPage(p);footer(p,totalPages);}
+  const safeName=(selectedFile?selectedFile.name.replace(/\.[^.]+$/,''):'deepscan')+'_video_report.pdf';
   doc.save(safeName);
 }
 
@@ -1860,10 +1084,10 @@ function renderHistory() {
     <div class="history-item">
       ${h.preview
         ? `<img src="${h.preview}" class="history-thumb" alt="" />`
-        : `<div class="history-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${h.type === 'video' ? '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>' : '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'}</svg></div>`}
+        : `<div class="history-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${h.type==='video'?'<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'}</svg></div>`}
       <div class="history-info">
         <div class="history-name">${h.name}</div>
-        <div class="history-meta">${h.type.toUpperCase()} · ${h.ts} · ${(h.fakeProb * 100).toFixed(1)}% fake</div>
+        <div class="history-meta">${h.type.toUpperCase()} · ${h.ts} · ${(h.fakeProb*100).toFixed(1)}% fake</div>
       </div>
       <span class="verdict-pill ${h.verdict}">${h.verdict.toUpperCase()}</span>
     </div>`).join('');
