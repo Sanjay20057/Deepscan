@@ -3,23 +3,21 @@ services:
     name: deepscan-backend
     runtime: python
     region: oregon
-    plan: starter          # upgrade to standard if model is slow
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: bash start.sh
     envVars:
       - key: FASTAPI_BASE_URL
         value: http://localhost:8000
       - key: GROQ_API_KEY
-        sync: false        # you'll paste this in Render dashboard
+        sync: false
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: MAX_UPLOAD_MB
         value: "200"
+      - key: NETLIFY_ORIGIN
+        value: "https://YOUR-SITE.netlify.app"
     disk:
       name: model-storage
       mountPath: /opt/render/project/src
       sizeGB: 1
-    envVars:
-  - key: NETLIFY_ORIGIN
-    value: "https://YOUR-SITE.netlify.app"  # paste your actual Netlify URL
-  # ... keep all existing env vars
