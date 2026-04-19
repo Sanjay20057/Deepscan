@@ -22,4 +22,4 @@ sleep 20
 echo "==> Starting Flask Web Gateway..."
 # Using -w 1 (1 worker) instead of 2 to save RAM on Render's free tier
 # This binds to the PORT variable (defaulting to 10000)
-exec gunicorn -w 1 -b 0.0.0.0:${PORT:-10000} "flask_app:create_app()"
+gunicorn -w 2 -b 0.0.0.0:$PORT "Backend.flask_app:create_app()"
