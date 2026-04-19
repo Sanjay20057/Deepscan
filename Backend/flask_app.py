@@ -36,9 +36,9 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
-# ── Load .env from the same directory as this file ────────────────────────────
+# Change this at the top of flask_app.py
 _HERE = Path(__file__).resolve().parent  # Points to 'Backend'
-_ROOT = _HERE.parent                    # Points to the main 'Deepscan' folder
+_ROOT = _HERE.parent                    # Points to the main Deepscan folder
 
 # ── CONFIG ────────────────────────────────────────────────────
 FASTAPI_BASE_URL  = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
@@ -71,7 +71,7 @@ def create_app() -> Flask:
     app = Flask(
         __name__,
         static_folder=str(_ROOT / "static"), 
-        template_folder=str(_ROOT), # Since your HTML is in root
+        template_folder=str(_ROOT), 
     )
     app.secret_key = FLASK_SECRET_KEY
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
@@ -113,26 +113,18 @@ def create_app() -> Flask:
             return response
 
     # ── STATIC FRONTEND ───────────────────────────────────────
-
-    # ── STATIC FRONTEND ───────────────────────────────────────
-
     @app.route("/")
     def index():
-        """Serves landing.html from the main folder"""
         return send_from_directory(str(_ROOT), "index.html")
 
     @app.route("/app")
-    @app.route("/app.html")
     def app_ui():
-        """Serves app.html (your scanner) from the main folder"""
-        # Note: You previously pointed this to index.html; change to app.html if that is your scanner
-        return send_from_directory(str(_ROOT), "app.html")
+        # Make sure this matches your filename in the root
+        return send_from_directory(str(_ROOT), "app.html") 
 
     @app.route("/static/<path:filename>")
     def static_files(filename):
-        """Serves CSS/JS from the static folder in root"""
         return send_from_directory(str(_ROOT / "static"), filename)
-
     # ── HEALTH / STATUS ───────────────────────────────────────
 
     @app.route("/health")
