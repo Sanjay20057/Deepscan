@@ -114,31 +114,23 @@ def create_app() -> Flask:
 
     # ── STATIC FRONTEND ───────────────────────────────────────
 
-    @app.route("/")
-    def index():
-        """Root serves the landing page."""
-        try:
-            return render_template("landing.html")
-        except Exception:
-            return send_from_directory(str(_HERE / "static"), "landing.html")
+    # ── STATIC FRONTEND ───────────────────────────────────────
 
+    @app.route("/")
     @app.route("/landing")
-    @app.route("/landing.html")
-    def landing():
-        """Explicit landing page route — same as root."""
-        try:
-            return render_template("landing.html")
-        except Exception:
-            return send_from_directory(str(_HERE / "static"), "landing.html")
+    def index():
+        """Serves landing.html from the root directory"""
+        return send_from_directory(str(_HERE), "landing.html")
 
     @app.route("/app")
     @app.route("/app.html")
     def app_ui():
-        """The main DeepScan analysis interface."""
-        return send_from_directory(str(_HERE / "static"), "index.html")
+        """Serves app.html (your scanner) from the root directory"""
+        return send_from_directory(str(_HERE), "app.html")
 
     @app.route("/static/<path:filename>")
     def static_files(filename):
+        """Serves CSS/JS from the static folder"""
         return send_from_directory(str(_HERE / "static"), filename)
 
     # ── HEALTH / STATUS ───────────────────────────────────────
