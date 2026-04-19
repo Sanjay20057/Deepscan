@@ -2,7 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for OpenCV and TensorFlow
+# Hugging Face Spaces runs on port 7860
+ENV PORT=7860
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
@@ -11,21 +15,20 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
-COPY requirements.txt .
-
+# Copy requirements and install
+COPY Backend/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install "numpy<2.0.0" && \
     pip install --no-cache-dir -r requirements.txt
-# Copy all backend files
-COPY . .
+
+# Copy backend files
+COPY Backend/ .
 
 # Create data directory
 RUN mkdir -p data
 
-# Expose ports
-EXPOSE 10000
-EXPOSE 8000
+# Hugging Face requires port 7860
+EXPOSE 7860
 
 # Start both services
 CMD ["bash", "start.sh"]
