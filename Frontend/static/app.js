@@ -270,7 +270,7 @@ async function checkApiStatus() {
   const cb = document.getElementById('cnn-status-badge');
 
   try {
-    const r = await fetch(`/api/status`, { signal: AbortSignal.timeout(4000) });
+    const r = await fetch(`${FLASK_ORIGIN}/api/status`, { signal: AbortSignal.timeout(4000) });
     if (!r.ok) throw new Error('non-200');
     const d = await r.json();
 
