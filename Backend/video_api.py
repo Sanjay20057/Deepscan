@@ -34,7 +34,7 @@ load_dotenv()
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 IMG_SIZE          = 224
 THUMBNAIL_MAX_DIM = 240
-FRAMES_PER_VIDEO  = 5
+FRAMES_PER_VIDEO  = 20
 FAKE_THRESHOLD    = 0.5   # applied to fake_prob = 1 - raw_sigmoid
 
 # Change this in video_api.py
