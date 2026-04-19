@@ -6,8 +6,8 @@ echo "==> Upgrading pip and essential tools..."
 pip install --upgrade pip setuptools wheel
 
 echo "==> Installing compatible NumPy and TensorFlow..."
-# We force numpy<2.0.0 here to fix the 'AttributeError: _ARRAY_API not found'
-pip install "numpy<2.0.0" tensorflow-cpu==2.14.0 --only-binary=:all: --quiet
+# Change 2.14.0 to 2.16.1
+pip install "numpy<2.0.0" tensorflow-cpu==2.16.1 --only-binary=:all: --quiet
 
 echo "==> Starting FastAPI Backend Logic..."
 # Running in the background (&) so the script can continue to Flask
