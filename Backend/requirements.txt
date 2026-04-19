@@ -12,3 +12,4 @@ werkzeug>=3.0.0
 h5py>=3.9.0
 opencv-python-headless>=4.9.0
 tensorflow-cpu  # Add this if it's missing to ensure the model can load
+flask-cors
