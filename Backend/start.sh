@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Go into Backend folder where all .py files live
-cd Backend
-
 echo "==> Starting FastAPI Backend Logic..."
 uvicorn video_api:app --host 0.0.0.0 --port 8000 &
 
