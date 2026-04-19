@@ -24,7 +24,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # This tells GitHub to ONLY deploy the frontend folder
-          path: './frontend'
+          path: './Frontend'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
