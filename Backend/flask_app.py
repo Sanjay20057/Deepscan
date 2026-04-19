@@ -33,7 +33,7 @@ FLASK_SECRET_KEY  = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
 HISTORY_FILE      = Path(os.getenv("HISTORY_FILE", str(_HERE / "data" / "history.json")))
 MAX_UPLOAD_MB     = int(os.getenv("MAX_UPLOAD_MB", "200"))
 
-PORT              = int(os.getenv("PORT", os.getenv("FLASK_PORT", 10000)))
+PORT              = int(os.getenv("PORT", os.getenv("FLASK_PORT", 7860)))
 IS_PRODUCTION     = os.getenv("RENDER", "") != ""
 FLASK_DEBUG       = False if IS_PRODUCTION else os.getenv("FLASK_DEBUG", "true").lower() == "true"
 
