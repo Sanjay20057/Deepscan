@@ -37,7 +37,8 @@ THUMBNAIL_MAX_DIM = 240
 FRAMES_PER_VIDEO  = 20
 FAKE_THRESHOLD    = 0.5   # applied to fake_prob = 1 - raw_sigmoid
 
-MODEL_PATH = "Backend/deepfake_model.h5"
+# Change this in video_api.py
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "deepfake_model.h5")
 
 SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 VIDEO_EXTENSIONS      = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"}
