@@ -12,7 +12,8 @@ pip install "numpy<2.0.0" tensorflow-cpu==2.16.1 --only-binary=:all: --quiet
 echo "==> Starting FastAPI Backend Logic..."
 # Running in the background (&) so the script can continue to Flask
 # uvicorn handles the CNN model loading in video_api.py
-uvicorn video_api:app --host 0.0.0.0 --port 8000 &
+# Start FastAPI on port 8000 so Flask can find it
+uvicorn Backend.video_api:app --host 0.0.0.0 --port 8000 &
 
 # CRITICAL: Give the CNN model time to load. TensorFlow is heavy and slow on Render's free tier.
 # Without this, Flask might try to connect to an 'offline' FastAPI
