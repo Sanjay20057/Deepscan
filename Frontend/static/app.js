@@ -11,7 +11,7 @@ let lastPreviewUrl  = null;
 try { analysisHistory = JSON.parse(localStorage.getItem('deepscan_history') || '[]'); }
 catch (_) { analysisHistory = []; }
 
-const FLASK_ORIGIN = '';
+const FLASK_ORIGIN = 'https://deepscan-iohh.onrender.com';
 
 // Pipeline: CNN-only. fake_prob = 1.0 - raw_sigmoid. Threshold = 0.50.
 const FAKE_THRESHOLD = 0.50;
