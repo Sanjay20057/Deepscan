@@ -37,8 +37,8 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 # Change this at the top of flask_app.py
-_HERE = Path(__file__).resolve().parent  # Points to 'Backend'
-_ROOT = _HERE.parent                    # Points to the main Deepscan folder
+_HERE = Path(__file__).resolve().parent          # This is 'Backend'
+_ROOT = _HERE.parent / "Frontend"               # This points to 'Frontend' folder
 
 # ── CONFIG ────────────────────────────────────────────────────
 FASTAPI_BASE_URL  = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
@@ -69,9 +69,9 @@ IMAGE_FAKE_THRESHOLD = 0.50
 # ── FACTORY ───────────────────────────────────────────────────
 def create_app() -> Flask:
     app = Flask(
-        __name__,
-        static_folder=str(_ROOT / "static"), 
-        template_folder=str(_ROOT), 
+      __name__,
+      static_folder=str(_ROOT / "static"),
+      template_folder=str(_ROOT)
     )
     app.secret_key = FLASK_SECRET_KEY
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
