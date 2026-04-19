@@ -9,6 +9,9 @@ echo "==> Installing compatible NumPy and TensorFlow..."
 # Change 2.14.0 to 2.16.1
 pip install "numpy<2.0.0" tensorflow-cpu==2.16.1 --only-binary=:all: --quiet
 
+# Add current directory to path so it can find the 'Backend' module
+export PYTHONPATH=$PYTHONPATH:.
+
 echo "==> Starting FastAPI Backend Logic..."
 # Running in the background (&) so the script can continue to Flask
 # uvicorn handles the CNN model loading in video_api.py
