@@ -14,10 +14,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for caching
 COPY requirements.txt .
 
-# Install Python packages
 RUN pip install --upgrade pip && \
+    pip install "numpy<2.0.0" && \
     pip install --no-cache-dir -r requirements.txt
-
 # Copy all backend files
 COPY . .
 
