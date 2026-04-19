@@ -1,21 +1,5 @@
 """
 flask_app.py — Flask web server for DeepScan (CNN-Only)
-
-Production changes for Render deployment:
-  - PORT now reads from Render's dynamic $PORT env variable (default 10000)
-  - FLASK_DEBUG forced to False in production
-  - FASTAPI_BASE_URL defaults to localhost:8000 (same Render dyno)
-  - CORS headers added for Netlify frontend requests
-  - Health check endpoint improved for Render's health monitoring
-  - MAX_CONTENT_LENGTH error handling improved
-  - Sightengine completely removed
-  - IMAGE_FAKE_THRESHOLD = 0.50 (matches video_api.py)
-
-Run locally:
-    python flask_app.py
-
-Run in production (Render):
-    gunicorn -w 2 -b 0.0.0.0:$PORT "flask_app:create_app()"
 """
 
 import io
@@ -34,11 +18,13 @@ from flask import (
     request,
     send_from_directory,
 )
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-# Change this at the top of flask_app.py
-_HERE = Path(__file__).resolve().parent          # This is 'Backend'
-_ROOT = _HERE.parent / "Frontend"               # This points to 'Frontend' folder
+load_dotenv()
+
+_HERE = Path(__file__).resolve().parent
+_ROOT = _HERE.parent / "Frontend"
 
 # ── CONFIG ────────────────────────────────────────────────────
 FASTAPI_BASE_URL  = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
@@ -47,11 +33,8 @@ FLASK_SECRET_KEY  = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
 HISTORY_FILE      = Path(os.getenv("HISTORY_FILE", str(_HERE / "data" / "history.json")))
 MAX_UPLOAD_MB     = int(os.getenv("MAX_UPLOAD_MB", "200"))
 
-# ── Render assigns PORT dynamically — always respect it ───────
 PORT              = int(os.getenv("PORT", os.getenv("FLASK_PORT", 10000)))
-
-# ── Force debug off in production ─────────────────────────────
-IS_PRODUCTION     = os.getenv("RENDER", "") != ""          # Render sets $RENDER automatically
+IS_PRODUCTION     = os.getenv("RENDER", "") != ""
 FLASK_DEBUG       = False if IS_PRODUCTION else os.getenv("FLASK_DEBUG", "true").lower() == "true"
 
 GROQ_API_URL        = "https://api.groq.com/openai/v1/chat/completions"
@@ -62,55 +45,23 @@ GROQ_REQUEST_TIMEOUT = 30
 ALLOWED_IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
 ALLOWED_VIDEO_EXTS = {"mp4", "avi", "mov", "mkv", "webm", "flv"}
 
-# CNN-only pipeline: fake_prob = 1 - raw_sigmoid, threshold 0.50
 IMAGE_FAKE_THRESHOLD = 0.50
 
 
 # ── FACTORY ───────────────────────────────────────────────────
 def create_app() -> Flask:
     app = Flask(
-      __name__,
-      static_folder=str(_ROOT / "static"),
-      template_folder=str(_ROOT)
+        __name__,
+        static_folder=str(_ROOT / "static"),
+        template_folder=str(_ROOT)
     )
     app.secret_key = FLASK_SECRET_KEY
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # ── CORS — allow Netlify frontend to call this backend ────
-    @app.after_request
-    def add_cors_headers(response):
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://localhost:5000",
-            "http://127.0.0.1:5000",
-        ]
-        # Also allow any Netlify subdomain and custom domains
-        netlify_origin = os.getenv("NETLIFY_ORIGIN", "")
-        if netlify_origin:
-            allowed_origins.append(netlify_origin)
-
-        origin = request.headers.get("Origin", "")
-
-        # Allow all netlify.app subdomains automatically
-        if origin.endswith(".netlify.app") or origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"]  = origin
-        elif not IS_PRODUCTION:
-            # In local dev, allow all origins
-            response.headers["Access-Control-Allow-Origin"]  = "*"
-
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Max-Age"]       = "86400"
-        return response
-
-    @app.before_request
-    def handle_preflight():
-        """Handle CORS preflight OPTIONS requests."""
-        if request.method == "OPTIONS":
-            response = app.make_default_options_response()
-            return response
+    # ── CORS — allows Netlify / GitHub Pages to call this API ─
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # ── STATIC FRONTEND ───────────────────────────────────────
     @app.route("/")
@@ -119,17 +70,15 @@ def create_app() -> Flask:
 
     @app.route("/app")
     def app_ui():
-        # Make sure this matches your filename in the root
-        return send_from_directory(str(_ROOT), "app.html") 
+        return send_from_directory(str(_ROOT), "app.html")
 
     @app.route("/static/<path:filename>")
     def static_files(filename):
         return send_from_directory(str(_ROOT / "static"), filename)
-    # ── HEALTH / STATUS ───────────────────────────────────────
 
+    # ── HEALTH / STATUS ───────────────────────────────────────
     @app.route("/health")
     def health_check():
-        """Simple health check for Render's health monitoring."""
         return jsonify({"status": "ok", "service": "flask"}), 200
 
     @app.route("/api/status")
@@ -152,7 +101,7 @@ def create_app() -> Flask:
             "model_loaded":           model_loaded,
             "fastapi_detail":         fastapi_detail,
             "groq_configured":        bool(GROQ_API_KEY),
-            "sightengine_configured": False,   # removed — always False
+            "sightengine_configured": False,
             "pipeline":               "cnn-only",
             "fake_threshold":         IMAGE_FAKE_THRESHOLD,
             "environment":            "production" if IS_PRODUCTION else "development",
@@ -160,7 +109,6 @@ def create_app() -> Flask:
         })
 
     # ── PROXY: IMAGE ANALYSIS ─────────────────────────────────
-
     @app.route("/api/analyse/image", methods=["POST"])
     def analyse_image():
         if "file" not in request.files:
@@ -173,7 +121,6 @@ def create_app() -> Flask:
         file_bytes = file.read()
         filename   = secure_filename(file.filename or "upload.jpg")
 
-        # ── Try FastAPI backend (CNN) ────────────────────────
         try:
             resp = requests.post(
                 f"{FASTAPI_BASE_URL}/analyse/image",
@@ -197,7 +144,6 @@ def create_app() -> Flask:
             return jsonify({"error": str(exc)}), 502
 
     # ── PROXY: VIDEO ANALYSIS ─────────────────────────────────
-
     @app.route("/api/analyse/video", methods=["POST"])
     def analyse_video():
         if "file" not in request.files:
@@ -233,8 +179,7 @@ def create_app() -> Flask:
         except requests.exceptions.RequestException as exc:
             return jsonify({"error": str(exc)}), 502
 
-    # ── GROQ EXPLAIN ─────────────────────────────────────────
-
+    # ── GROQ EXPLAIN ──────────────────────────────────────────
     @app.route("/api/groq/explain", methods=["POST"])
     def groq_explain():
         if not GROQ_API_KEY:
@@ -253,7 +198,6 @@ def create_app() -> Flask:
         return jsonify({"text": text})
 
     # ── HISTORY ───────────────────────────────────────────────
-
     @app.route("/api/history", methods=["GET"])
     def get_history():
         return jsonify(_load_history())
@@ -264,7 +208,6 @@ def create_app() -> Flask:
         return jsonify({"cleared": True})
 
     # ── ERROR HANDLERS ────────────────────────────────────────
-
     @app.errorhandler(413)
     def too_large(e):
         return jsonify({"error": f"File too large. Max size: {MAX_UPLOAD_MB} MB"}), 413
@@ -281,7 +224,6 @@ def create_app() -> Flask:
 
 
 # ── HELPERS ───────────────────────────────────────────────────
-
 def _allowed_file(filename: str, allowed: set) -> bool:
     if not filename:
         return False
@@ -290,7 +232,6 @@ def _allowed_file(filename: str, allowed: set) -> bool:
 
 
 def _call_groq(prompt: str, max_tokens: int = 400) -> tuple:
-    """Returns (text: str, error: str|None)."""
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type":  "application/json",
