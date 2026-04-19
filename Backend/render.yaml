@@ -19,3 +19,7 @@ services:
       name: model-storage
       mountPath: /opt/render/project/src
       sizeGB: 1
+    envVars:
+  - key: NETLIFY_ORIGIN
+    value: "https://YOUR-SITE.netlify.app"  # paste your actual Netlify URL
+  # ... keep all existing env vars
