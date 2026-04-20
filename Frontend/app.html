@@ -8,25 +8,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    /* ── MOBILE TOP BAR ── */
-    /* Fixed top bar on mobile containing hamburger + brand + back btn */
+    /* ────────────────────────────────────────────────────
+       MOBILE TOP BAR
+       Key: display:flex inside .main flex column — NOT fixed/absolute.
+       This means it pushes messages DOWN naturally; no overlap.
+    ──────────────────────────────────────────────────── */
     .mobile-topbar {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 200;
-      height: 56px;
-      background: rgba(19,19,20,0.96);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
+      display: none;           /* hidden on desktop */
+      flex-shrink: 0;
+      height: 52px;
+      width: 100%;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border2);
       align-items: center;
       padding: 0 12px;
-      gap: 8px;
+      gap: 10px;
     }
 
-    /* Hamburger inside mobile topbar */
-    .mobile-ham-btn {
-      width: 38px; height: 38px;
+    .mobile-ham {
+      width: 36px; height: 36px;
       border-radius: 10px;
       border: 1px solid var(--border2);
       background: var(--bg3);
@@ -34,48 +34,39 @@
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      transition: all 0.2s ease;
+      transition: background 0.2s, color 0.2s;
     }
-    .mobile-ham-btn:hover { background: var(--bg4); color: var(--text); }
+    .mobile-ham:hover { background: var(--bg4); color: var(--text); }
 
-    /* Brand in mobile topbar */
     .mobile-brand {
       flex: 1;
       display: flex; align-items: center; gap: 8px;
-      padding-left: 4px;
     }
-    .mobile-brand-text {
+    .mobile-brand-name {
       font-family: var(--font-ui);
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 500;
       color: var(--text);
     }
 
-    /* Back to Home button in mobile topbar (right side) */
-    .mobile-back-btn {
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .mobile-home-link {
+      display: flex; align-items: center; gap: 5px;
       padding: 6px 12px;
       border-radius: 50px;
       border: 1px solid var(--border2);
-      background: var(--bg3);
+      background: transparent;
       color: var(--text-2);
       font-family: var(--font-ui);
       font-size: 0.72rem;
       font-weight: 500;
       text-decoration: none;
-      transition: all 0.2s ease;
       flex-shrink: 0;
       white-space: nowrap;
+      transition: all 0.2s;
     }
-    .mobile-back-btn:hover {
-      background: rgba(66,133,244,0.12);
-      border-color: rgba(66,133,244,0.3);
-      color: var(--accent-blue);
-    }
+    .mobile-home-link:hover { background: var(--bg3); color: var(--text); }
 
-    /* BACK TO HOME in desktop sidebar nav */
+    /* Desktop sidebar back-to-home */
     .back-home-btn {
       display: flex;
       align-items: center;
@@ -88,10 +79,9 @@
       color: var(--text-2);
       font-family: var(--font-ui);
       font-size: 0.82rem;
-      font-weight: 400;
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.2s ease;
+      transition: all 0.2s;
       margin-top: 6px;
     }
     .back-home-btn:hover {
@@ -99,62 +89,124 @@
       border-color: rgba(66,133,244,0.25);
       color: var(--accent-blue);
     }
-    .back-home-btn svg { flex-shrink: 0; transition: transform 0.2s ease; }
-    .back-home-btn:hover svg { transform: translateX(-2px); }
 
+    /* ────────────────────────────────────────────────────
+       MOBILE OVERRIDES  (≤640px)
+    ──────────────────────────────────────────────────── */
     @media (max-width: 640px) {
-      /* Show mobile topbar, hide desktop sidebar toggle */
+
+      /* Show the topbar (it's a flex child of .main) */
       .mobile-topbar { display: flex; }
-      .sidebar-toggle { display: none !important; }
+
+      /* Sidebar becomes a fixed drawer */
+      .sidebar {
+        position: fixed !important;
+        top: 0; left: 0; bottom: 0;
+        width: 280px;
+        min-height: 100%;
+        transform: translateX(-100%);
+        z-index: 500;
+        transition: transform 0.28s ease;
+        box-shadow: 6px 0 28px rgba(0,0,0,0.6);
+      }
+      .sidebar.open { transform: translateX(0); }
+
+      /* Overlay behind open sidebar */
+      .sidebar-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(3px);
+        z-index: 400;
+        display: none;
+      }
+      .sidebar-overlay.visible { display: block; }
+
+      /* Messages take available space, no extra top padding needed */
+      .messages { padding: 12px 0 12px; }
+
+      /* Bot/user messages: full width, compact padding */
+      .msg.bot  { padding: 10px 12px 10px 12px; }
+      .msg.user { padding: 6px 12px 6px 12px; }
+      .msg.user .msg-bubble { max-width: 88vw; font-size: 0.84rem; }
+
+      /* Chip grid: 2 equal columns */
+      .chip-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+      }
+      .chip { padding: 8px 10px; }
+      .chip-label { font-size: 0.58rem; }
+      .chip-value { font-size: 0.88rem; }
+
+      /* Frame grid: 2 columns */
+      .frame-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+      }
+      .frames-header { font-size: 0.68rem; }
+
+      /* Verdict banner compact */
+      .verdict-banner { padding: 12px 14px; gap: 10px; }
+      .verdict-icon   { width: 32px; height: 32px; font-size: 1rem; }
+      .verdict-label  { font-size: 0.88rem; }
+      .verdict-sub    { font-size: 0.72rem; }
+
+      /* Input dock */
+      .input-dock { padding: 6px 10px 14px; }
+      .gemini-input-row { padding: 8px 10px; min-height: 50px; gap: 2px; }
+      .gemini-mode-pill { padding: 5px 8px; font-size: 0.7rem; gap: 3px; }
+      .gemini-mode-pill svg { width: 12px; height: 12px; }
+      .gemini-placeholder { font-size: 0.78rem; padding: 0 4px; }
+
+      /* History / Settings */
+      .view-header  { padding: 14px 16px 10px; }
+      .history-list { padding: 8px 16px 80px; }
+      .settings-body { padding: 8px 16px 80px; }
+
+      .history-item  { padding: 12px; gap: 10px; }
+      .history-thumb { width: 48px; height: 34px; }
+      .history-icon  { width: 48px; height: 34px; }
+
+      .explanation-block { padding: 12px 14px; font-size: 0.82rem; }
+      .download-pdf-btn  { width: 100%; justify-content: center; padding: 11px 16px; }
+
+      .gemini-advanced-panel { flex-direction: column; }
+
+      /* Attach menu slides up from bottom */
+      .attach-menu {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        border-radius: 14px 14px 0 0;
+        padding: 12px 12px 28px;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+        animation: slideUpMenu 0.2s ease;
+        z-index: 600;
+      }
+      @keyframes slideUpMenu {
+        from { transform: translateY(100%); }
+        to   { transform: translateY(0); }
+      }
+      .attach-option { padding: 14px 16px; font-size: 0.9rem; }
+
+      .intro-card  { max-width: 100%; }
+      .intro-title { font-size: 1.2rem; }
+      .intro-body  { font-size: 0.82rem; }
+      .intro-steps { font-size: 0.78rem; line-height: 1.9; padding: 12px 14px; }
+
+      .signal-wrap  { flex-direction: column; }
+      .signal-table { min-width: unset; width: 100%; }
+      .analysis-img { max-width: 100%; }
     }
 
-    @media (min-width: 641px) {
-      /* Hide mobile topbar on desktop — sidebar is always visible */
-      .mobile-topbar { display: none; }
+    @media (max-width: 380px) {
+      .gemini-mode-pill span:not(svg) { display: none; }
+      .gemini-placeholder { font-size: 0.72rem; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ── OLD DESKTOP SIDEBAR TOGGLE (hidden on mobile, kept for reference) ── -->
-  <button class="sidebar-toggle" id="sidebar-toggle" onclick="openSidebar()" aria-label="Open menu" style="display:none">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-    </svg>
-  </button>
-
-  <!-- ── MOBILE TOP BAR (only on ≤640px) ── -->
-  <div class="mobile-topbar" id="mobile-topbar">
-    <button class="mobile-ham-btn" onclick="openSidebar()" aria-label="Open menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="3" y1="6" x2="21" y2="6"/>
-        <line x1="3" y1="12" x2="21" y2="12"/>
-        <line x1="3" y1="18" x2="21" y2="18"/>
-      </svg>
-    </button>
-    <div class="mobile-brand">
-      <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
-        <path d="M14 2L26 14L14 26L2 14Z" fill="url(#mob-gem)" opacity="0.9"/>
-        <path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.15"/>
-        <defs>
-          <linearGradient id="mob-gem" x1="2" y1="2" x2="26" y2="26">
-            <stop offset="0%" stop-color="#4285f4"/>
-            <stop offset="50%" stop-color="#8b5cf6"/>
-            <stop offset="100%" stop-color="#06b6d4"/>
-          </linearGradient>
-        </defs>
-      </svg>
-      <span class="mobile-brand-text">DeepScan</span>
-    </div>
-    <a href="./index.html" class="mobile-back-btn">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-      Home
-    </a>
-  </div>
-
-  <!-- SIDEBAR OVERLAY (mobile) -->
+  <!-- Sidebar overlay (mobile) -->
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
   <!-- SIDEBAR -->
@@ -204,7 +256,6 @@
         <span>Settings</span>
       </button>
 
-      <!-- BACK TO HOME — sidebar nav (desktop) -->
       <a href="./index.html" class="back-home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <polyline points="15 18 9 12 15 6"/>
@@ -225,18 +276,54 @@
     </div>
   </aside>
 
-  <!-- MAIN AREA -->
+  <!-- MAIN -->
   <main class="main">
+
+    <!--
+      MOBILE TOP BAR — child of .main (flex column).
+      It is NOT position:fixed or absolute.
+      It sits ABOVE the view div, pushing content down naturally.
+      display:none on desktop, display:flex on ≤640px.
+    -->
+    <div class="mobile-topbar">
+      <button class="mobile-ham" onclick="openSidebar()" aria-label="Open menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="mobile-brand">
+        <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2L26 14L14 26L2 14Z" fill="url(#mob-gem-g)" opacity="0.9"/>
+          <path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.15"/>
+          <defs>
+            <linearGradient id="mob-gem-g" x1="2" y1="2" x2="26" y2="26">
+              <stop offset="0%" stop-color="#4285f4"/>
+              <stop offset="50%" stop-color="#8b5cf6"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="mobile-brand-name">DeepScan</span>
+      </div>
+
+      <a href="./index.html" class="mobile-home-link">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Home
+      </a>
+    </div>
 
     <!-- CHAT VIEW -->
     <div class="view active" id="view-chat">
       <div class="messages" id="messages"></div>
 
-      <!-- GEMINI-STYLE INPUT DOCK -->
       <div class="input-dock">
         <div class="gemini-input-card">
 
-          <!-- File preview strip (shown when file selected) -->
           <div class="gemini-preview-strip" id="gemini-preview-strip" style="display:none">
             <div class="gemini-file-chip" id="gemini-file-chip">
               <img id="gemini-preview-img" src="" alt="" style="display:none" />
@@ -254,16 +341,13 @@
             </div>
           </div>
 
-          <!-- Main input row -->
           <div class="gemini-input-row">
-            <!-- Left: attach button -->
             <button class="gemini-icon-btn gemini-attach" onclick="openAttachMenu(event)" title="Upload file" id="attach-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
               </svg>
             </button>
 
-            <!-- Mode toggle pills -->
             <div class="gemini-mode-pills">
               <button class="gemini-mode-pill active" id="gpill-image" onclick="selectMode('image', true)">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -280,10 +364,8 @@
               </button>
             </div>
 
-            <!-- Placeholder text — clicking opens file picker -->
-            <div class="gemini-placeholder" id="gemini-placeholder" onclick="triggerFileInput()" style="cursor:pointer">Upload a file to analyse…</div>
+            <div class="gemini-placeholder" id="gemini-placeholder" onclick="triggerFileInput()">Upload a file…</div>
 
-            <!-- Right: settings + send -->
             <div class="gemini-right-actions">
               <button class="gemini-icon-btn" onclick="toggleAdvanced()" title="Settings" id="advanced-toggle">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -301,7 +383,6 @@
             </div>
           </div>
 
-          <!-- Advanced panel (hidden by default) -->
           <div class="gemini-advanced-panel" id="gemini-advanced-panel">
             <div class="adv-field">
               <label>Flask Server URL</label>
@@ -315,11 +396,9 @@
 
         </div>
 
-        <!-- Hidden file inputs -->
         <input type="file" id="file-input-image" accept=".jpg,.jpeg,.png,.webp" hidden />
         <input type="file" id="file-input-video" accept=".mp4,.avi,.mov,.mkv,.webm" hidden />
 
-        <!-- Attach menu -->
         <div class="attach-menu" id="attach-menu" style="display:none">
           <button class="attach-option" onclick="selectMode('image', true); closeAttachMenu()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -336,7 +415,6 @@
           </button>
         </div>
       </div>
-
     </div>
 
     <!-- HISTORY VIEW -->
@@ -362,7 +440,7 @@
             <span>CNN Analysis</span>
             <input type="checkbox" id="set-cnn" checked disabled />
           </label>
-          <label class="toggle-row" style="opacity:0.4;pointer-events:none" title="Sightengine has been removed from this pipeline">
+          <label class="toggle-row" style="opacity:0.4;pointer-events:none">
             <span>Sightengine <span style="font-size:0.75em;color:var(--text-3)">(removed)</span></span>
             <input type="checkbox" id="set-se" disabled />
           </label>
@@ -374,45 +452,26 @@
         <div class="settings-card">
           <h3 class="settings-section-title">Thresholds</h3>
           <label class="slider-row">
-            <div class="slider-header">
-              <span>Video fake threshold</span>
-              <b id="thr-video-val">0.50</b>
-            </div>
+            <div class="slider-header"><span>Video fake threshold</span><b id="thr-video-val">0.50</b></div>
             <input type="range" min="0" max="1" step="0.05" value="0.50" id="thr-video" oninput="document.getElementById('thr-video-val').textContent=this.value" />
           </label>
           <label class="slider-row">
-            <div class="slider-header">
-              <span>Image fake threshold</span>
-              <b id="thr-img-val">0.50</b>
-            </div>
+            <div class="slider-header"><span>Image fake threshold</span><b id="thr-img-val">0.50</b></div>
             <input type="range" min="0" max="1" step="0.05" value="0.50" id="thr-img" oninput="document.getElementById('thr-img-val').textContent=this.value" />
           </label>
           <label class="slider-row">
-            <div class="slider-header">
-              <span>Frames per video</span>
-              <b id="fpv-val">20</b>
-            </div>
+            <div class="slider-header"><span>Frames per video</span><b id="fpv-val">20</b></div>
             <input type="range" min="5" max="40" step="5" value="20" id="fpv" oninput="document.getElementById('fpv-val').textContent=this.value" />
           </label>
           <p style="font-size:0.72rem;color:var(--text-3);margin-top:8px;padding:0 2px">
-            ℹ️ Backend threshold is fixed at <b>0.50</b> (<code>fake_prob = 1 − sigmoid</code>). Slider values are for display / future use.
+            ℹ️ Backend threshold fixed at <b>0.50</b> (<code>fake_prob = 1 − sigmoid</code>).
           </p>
         </div>
         <div class="settings-card" style="border-color:rgba(66,133,244,0.12)">
           <h3 class="settings-section-title">Navigation</h3>
-          <a href="./index.html" style="
-            display:inline-flex;align-items:center;gap:8px;
-            background:linear-gradient(135deg,rgba(66,133,244,0.1),rgba(139,92,246,0.08));
-            border:1px solid rgba(66,133,244,0.2);
-            border-radius:10px;padding:10px 16px;
-            color:var(--accent-blue);text-decoration:none;
-            font-family:var(--font-ui);font-size:0.83rem;font-weight:500;
-            transition:all 0.2s;
-          " onmouseover="this.style.background='rgba(66,133,244,0.15)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(66,133,244,0.1),rgba(139,92,246,0.08))'">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            Back to Home / Landing Page
+          <a href="./index.html" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(66,133,244,0.1),rgba(139,92,246,0.08));border:1px solid rgba(66,133,244,0.2);border-radius:10px;padding:10px 16px;color:var(--accent-blue);text-decoration:none;font-family:var(--font-ui);font-size:0.83rem;font-weight:500;transition:all 0.2s;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Back to Home
           </a>
         </div>
       </div>
@@ -423,7 +482,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="static/app.js"></script>
   <script>
-    // ── MOBILE SIDEBAR ────────────────────────────────────────
     function openSidebar() {
       document.getElementById('sidebar').classList.add('open');
       document.getElementById('sidebar-overlay').classList.add('visible');
