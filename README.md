@@ -73,16 +73,19 @@ A threshold of **0.50** is applied — scores at or above 0.50 are classified as
 
 ```
 Deepscan/
-├── static/
-│   ├── style.css          # Full dark-theme stylesheet
-│   └── app.js             # Core frontend logic (analysis, PDF, history)
-├── app.html               # Main chat UI (deepfake analyser)
-├── index.html             # Landing / home page
-├── flask_app.py           # Flask backend — serves frontend & proxies FastAPI
-├── fastapi_app.py         # FastAPI backend — CNN inference endpoint
-├── deepfake_model.h5      # Trained MobileNetV2 model weights
-├── train.py               # Model training script
-├── requirements.txt       # Python dependencies
+├── Backend/
+│   ├── flask_app.py                 
+│   ├── deepfake_model.h5      
+│   ├── __init__.py        
+│   ├── start.sh
+│   ├── video_api.py
+│   └── requirements.txt       
+├── Frontend/
+│   ├── static/
+│   │   ├── style.css          
+│   │   └── app.js             
+│   ├── app.html               
+│   └── index.html             
 └── README.md
 ```
 
