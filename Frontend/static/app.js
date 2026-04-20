@@ -255,7 +255,14 @@ function handleFile(file) {
     showError(`Unsupported file: <b>${file.name}</b>. Use JPG/PNG for images or MP4/MOV for videos.`);
     return;
   }
-  // Switch mode WITHOUT opening file picker
+  // ADD THIS BLOCK ↓
+  const maxMB = 5;
+  const fileMB = file.size / (1024 * 1024);
+  if (fileMB > maxMB) {
+    showError(`File too large: <b>${fileMB.toFixed(1)} MB</b>. Maximum allowed size is <b>${maxMB} MB</b>. Please compress or trim your file and try again.`);
+    return;
+  }
+  // ADD THIS BLOCK ↑
   if (isImg && currentMode !== 'image') selectMode('image', false);
   if (isVid && currentMode !== 'video') selectMode('video', false);
   selectedFile = file;
