@@ -11,7 +11,9 @@ let lastPreviewUrl  = null;
 try { analysisHistory = JSON.parse(localStorage.getItem('deepscan_history') || '[]'); }
 catch (_) { analysisHistory = []; }
 
-const FLASK_ORIGIN = 'https://sanjay72005-deepscan.hf.space';
+const FLASK_ORIGIN = '';
+
+// Pipeline: CNN-only. fake_prob = 1.0 - raw_sigmoid. Threshold = 0.50.
 const FAKE_THRESHOLD = 0.50;
 
 // ─────────────────────────────────────────────────────────────
@@ -25,11 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreSettings();
   checkApiStatus();
   setInterval(checkApiStatus, 20000);
-
-  // FIX: ensure input dock is always visible on mobile by
-  // re-checking layout after DOM is ready
-  fixMobileLayout();
-  window.addEventListener('resize', fixMobileLayout);
 
   document.addEventListener('click', (e) => {
     const menu = document.getElementById('attach-menu');
@@ -58,35 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-//  FIX: Mobile layout — ensure input dock never gets hidden
-// ─────────────────────────────────────────────────────────────
-function fixMobileLayout() {
-  const dock = document.querySelector('.input-dock');
-  const view = document.getElementById('view-chat');
-  const messages = document.getElementById('messages');
-  if (!dock || !view || !messages) return;
-
-  // Force input dock to always be visible and not flex-shrink away
-  dock.style.flexShrink = '0';
-  dock.style.position = 'relative';
-  dock.style.zIndex = '10';
-
-  // On mobile, ensure the messages area doesn't overflow and hide the dock
-  if (window.innerWidth <= 640) {
-    // Ensure the chat view uses column flex properly
-    view.style.display = 'flex';
-    view.style.flexDirection = 'column';
-    view.style.height = '100%';
-    view.style.overflow = 'hidden';
-
-    // Messages area scrolls, dock stays at bottom
-    messages.style.flex = '1';
-    messages.style.overflowY = 'auto';
-    messages.style.minHeight = '0';
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
 //  UTILS
 // ─────────────────────────────────────────────────────────────
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -94,6 +62,72 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function pct(v) { return (parseFloat(v) || 0) * 100; }
 function timeStr() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FILE TYPE DETECTION — always derive from actual file, never
+//  trust currentMode alone (fixes mobile vs desktop mismatch)
+// ─────────────────────────────────────────────────────────────
+function fileIsImage(file) {
+  if (!file) return false;
+  const n = file.name.toLowerCase();
+  return /\.(jpe?g|png|webp|gif|bmp|tiff?)$/.test(n) || file.type.startsWith('image/');
+}
+function fileIsVideo(file) {
+  if (!file) return false;
+  const n = file.name.toLowerCase();
+  return /\.(mp4|avi|mov|mkv|webm|flv|wmv|m4v)$/.test(n) || file.type.startsWith('video/');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  NORMALISE SERVER RESPONSE
+//  Trust the server verdict. Only derive verdict from fake_prob
+//  if server did not send one. Never auto-invert.
+// ─────────────────────────────────────────────────────────────
+function normaliseServerResult(raw, isImage) {
+  const result = Object.assign({}, raw);
+
+  result.media_type = isImage ? 'image' : 'video';
+
+  let fp = parseFloat(result.fake_probability);
+  if (isNaN(fp) || fp < 0 || fp > 1) fp = 0;
+  result.fake_probability = fp;
+
+  // Trust server verdict if present and valid; only derive if missing
+  if (result.verdict !== 'fake' && result.verdict !== 'real') {
+    result.verdict = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
+  }
+
+  // Sync confidence_pct
+  result.confidence_pct = parseFloat((fp * 100).toFixed(1));
+
+  // Sync cnn_label to match verdict if missing
+  if (!result.cnn_label) {
+    result.cnn_label = result.verdict;
+  }
+
+  // Normalise frame_results for video — trust per-frame verdict from server
+  if (!isImage && Array.isArray(result.frame_results)) {
+    result.frame_results = result.frame_results.map(fr => {
+      const frCopy = Object.assign({}, fr);
+      let frFp = parseFloat(frCopy.fake_prob);
+      if (isNaN(frFp) || frFp < 0 || frFp > 1) frFp = 0;
+      frCopy.fake_prob = frFp;
+
+      // Trust server frame verdict if valid; derive only if missing
+      if (frCopy.verdict !== 'fake' && frCopy.verdict !== 'real') {
+        frCopy.verdict = frFp >= FAKE_THRESHOLD ? 'fake' : 'real';
+      }
+      if (!frCopy.cnn_label) frCopy.cnn_label = frCopy.verdict;
+      return frCopy;
+    });
+
+    // Recount from normalised frames
+    result.fake_frame_count      = result.frame_results.filter(f => f.verdict === 'fake').length;
+    result.total_frames_analysed = result.frame_results.length;
+  }
+
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -129,8 +163,7 @@ function openAttachMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('attach-menu');
   if (!menu) return;
-  const isOpen = menu.style.display !== 'none' && menu.style.display !== '';
-  menu.style.display = isOpen ? 'none' : 'flex';
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
 }
 
 function closeAttachMenu() {
@@ -158,8 +191,6 @@ function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('view-' + view).classList.add('active');
   document.querySelector(`[data-view="${view}"]`).classList.add('active');
-  // Re-apply mobile layout fix when switching back to chat
-  if (view === 'chat') setTimeout(fixMobileLayout, 50);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -172,8 +203,6 @@ function selectMode(mode, openPicker = false) {
   if (pill) pill.classList.add('active');
   const ph = document.getElementById('gemini-placeholder');
   if (ph) ph.textContent = mode === 'image' ? 'Upload an image to analyse…' : 'Upload a video to analyse…';
-
-  // Only open picker if explicitly requested AND no file already selected
   if (openPicker && !selectedFile) {
     triggerFileInput();
   }
@@ -220,9 +249,8 @@ function setupDragDrop() {
 }
 
 function handleFile(file) {
-  const n = file.name.toLowerCase();
-  const isImg = /\.(jpe?g|png|webp)$/.test(n) || file.type.startsWith('image/');
-  const isVid = /\.(mp4|avi|mov|mkv|webm|flv)$/.test(n) || file.type.startsWith('video/');
+  const isImg = fileIsImage(file);
+  const isVid = fileIsVideo(file);
   if (!isImg && !isVid) {
     showError(`Unsupported file: <b>${file.name}</b>. Use JPG/PNG for images or MP4/MOV for videos.`);
     return;
@@ -314,8 +342,8 @@ async function checkApiStatus() {
     const d = await r.json();
 
     if (d.fastapi_ok && d.model_loaded) {
-      ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
-      cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
+      ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Flask + FastAPI</span>';
+      cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Loaded</span>';
     } else if (d.flask === 'ok') {
       ab.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">Online</span>';
       cb.innerHTML = '<span class="status-dot dot-on"></span><span class="status-text">CNN Ready</span>';
@@ -337,99 +365,9 @@ async function flaskIsAlive() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  NORMALISE SERVER RESPONSE
-//  FIX: Server returns raw_sigmoid. We must compute:
-//    fake_prob = 1 - raw_sigmoid
-//  Some servers return fake_probability already inverted,
-//  others return it as raw sigmoid. We detect and fix both.
-// ═════════════════════════════════════════════════════════════
-function normaliseServerResult(raw, isImage) {
-  const result = Object.assign({}, raw);
-
-  // Ensure media_type is set
-  result.media_type = isImage ? 'image' : 'video';
-
-  // ── fake_probability normalisation ──
-  // The pipeline formula is: fake_prob = 1 - sigmoid(output)
-  // If server returns raw sigmoid score as fake_probability,
-  // we need to invert it. We detect this by checking if
-  // the verdict contradicts what fake_probability implies.
-  let fp = parseFloat(result.fake_probability);
-  if (isNaN(fp)) fp = 0;
-
-  // If verdict is explicitly provided by server, trust it
-  // but re-derive fake_prob to be consistent with verdict:
-  //   fake verdict  → fake_prob should be >= 0.50
-  //   real verdict  → fake_prob should be <  0.50
-  if (result.verdict === 'fake' && fp < FAKE_THRESHOLD) {
-    // Server returned raw sigmoid (high = real), invert it
-    fp = 1 - fp;
-    result.fake_probability = fp;
-  } else if (result.verdict === 'real' && fp >= FAKE_THRESHOLD) {
-    // Server returned raw sigmoid (low = fake), invert it
-    fp = 1 - fp;
-    result.fake_probability = fp;
-  } else if (!result.verdict || result.verdict === 'unknown') {
-    // No verdict from server — derive from fake_prob
-    result.verdict = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
-  }
-
-  // Ensure confidence_pct is in sync
-  result.confidence_pct = parseFloat((fp * 100).toFixed(1));
-
-  // CNN confidence: this is the model's confidence in its own label
-  // It should always be >= 0.5 (confident in either direction)
-  if (result.cnn_confidence != null) {
-    const cc = parseFloat(result.cnn_confidence);
-    // If cnn_label disagrees with verdict, fix cnn_confidence too
-    if (result.cnn_label && result.cnn_label !== result.verdict) {
-      result.cnn_confidence = 1 - cc;
-      result.cnn_label = result.verdict;
-    }
-  }
-
-  // Normalise frame_results for video
-  if (!isImage && Array.isArray(result.frame_results)) {
-    result.frame_results = result.frame_results.map(fr => {
-      const frCopy = Object.assign({}, fr);
-      let frFp = parseFloat(frCopy.fake_prob);
-      if (isNaN(frFp)) frFp = 0;
-
-      // Same inversion logic per frame
-      if (frCopy.verdict === 'fake' && frFp < FAKE_THRESHOLD) {
-        frFp = 1 - frFp;
-        frCopy.fake_prob = frFp;
-      } else if (frCopy.verdict === 'real' && frFp >= FAKE_THRESHOLD) {
-        frFp = 1 - frFp;
-        frCopy.fake_prob = frFp;
-      } else if (!frCopy.verdict || frCopy.verdict === 'unknown') {
-        frCopy.verdict = frFp >= FAKE_THRESHOLD ? 'fake' : 'real';
-      }
-
-      // Sync cnn_label with verdict
-      if (frCopy.cnn_label && frCopy.cnn_label !== frCopy.verdict) {
-        const cc = parseFloat(frCopy.cnn_confidence);
-        if (!isNaN(cc)) frCopy.cnn_confidence = 1 - cc;
-        frCopy.cnn_label = frCopy.verdict;
-      }
-      return frCopy;
-    });
-
-    // Recount fake/real frames after normalisation
-    result.fake_frame_count = result.frame_results.filter(f => f.verdict === 'fake').length;
-    result.total_frames_analysed = result.frame_results.length;
-
-    // Re-derive overall fake_probability as mean of frame fake_probs
-    const mean = result.frame_results.reduce((s, f) => s + parseFloat(f.fake_prob || 0), 0) / result.frame_results.length;
-    result.fake_probability = parseFloat(mean.toFixed(4));
-    result.verdict = mean >= FAKE_THRESHOLD ? 'fake' : 'real';
-  }
-
-  return result;
-}
-
-// ═════════════════════════════════════════════════════════════
 //  MAIN ANALYSIS
+//  FIX: Always derive isImage from the actual file, not currentMode.
+//       This is the root cause of mobile vs desktop result mismatch.
 // ═════════════════════════════════════════════════════════════
 async function runAnalysis() {
   if (isAnalysing) return;
@@ -440,15 +378,13 @@ async function runAnalysis() {
   saveSettings();
   lastResult = null;
 
-  // Derive isImage from actual file — never trust currentMode alone
-  const fileName = selectedFile.name.toLowerCase();
-  const fileIsImg = /\.(jpe?g|png|webp)$/.test(fileName) || selectedFile.type.startsWith('image/');
-  const fileIsVid = /\.(mp4|avi|mov|mkv|webm|flv)$/.test(fileName) || selectedFile.type.startsWith('video/');
-  const isImage = fileIsImg || (!fileIsVid && currentMode === 'image');
+  // CRITICAL FIX: derive isImage from actual file MIME/extension, not currentMode
+  const isImage = fileIsImage(selectedFile);
+  const isVideo = fileIsVideo(selectedFile);
 
-  // Sync mode pill to match actual file type (no picker)
-  if (fileIsImg && currentMode !== 'image') selectMode('image', false);
-  if (fileIsVid && currentMode !== 'video') selectMode('video', false);
+  // Sync the mode pill to match actual file type (no picker trigger)
+  if (isImage && currentMode !== 'image') selectMode('image', false);
+  if (isVideo && currentMode !== 'video') selectMode('video', false);
 
   addUserMessage(
     `<div style="font-size:0.78rem;color:var(--text-2);margin-bottom:4px">${isImage ? 'Image' : 'Video'} · ${(selectedFile.size / 1e6).toFixed(2)} MB</div>` +
@@ -485,7 +421,7 @@ async function runAnalysis() {
         addBotMessage(`<span style="color:var(--fake)">Server error: ${result.error || res.statusText}. Falling back to demo…</span>`);
         result = buildDemoResult(isImage); isDemo = true;
       }
-      // FIX: normalise server response to correct any sigmoid inversion issues
+      // Normalise server response — trust verdict, only fill gaps
       if (!isDemo) {
         result = normaliseServerResult(result, isImage);
       }
@@ -521,41 +457,36 @@ async function runAnalysis() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DEMO BUILDER
-//  FIX: Demo result is always self-consistent — verdict matches
-//  fake_prob, cnn_label matches verdict, confidence is >= 0.5
+//  DEMO BUILDER — self-consistent, verdict always matches fake_prob
 // ─────────────────────────────────────────────────────────────
 function buildDemoResult(isImage) {
-  // Generate a clear fake_prob (avoid ambiguous values near 0.5)
+  // Avoid ambiguous values near threshold
   let fakeProbRaw;
-  do { fakeProbRaw = Math.random(); } while (fakeProbRaw > 0.40 && fakeProbRaw < 0.60);
+  do { fakeProbRaw = Math.random(); } while (fakeProbRaw > 0.42 && fakeProbRaw < 0.58);
 
-  const isFake   = fakeProbRaw >= FAKE_THRESHOLD;
-  const verdict  = isFake ? 'fake' : 'real';
-  // CNN confidence = how confident the model is in its label
-  const cnnConf  = isFake ? fakeProbRaw : (1.0 - fakeProbRaw);
+  const isFake  = fakeProbRaw >= FAKE_THRESHOLD;
+  const verdict = isFake ? 'fake' : 'real';
+  const cnnConf = isFake ? fakeProbRaw : (1.0 - fakeProbRaw);
 
   const frameResults = isImage ? null : Array.from({ length: 12 }, (_, i) => {
-    // Keep frame probs consistent with overall verdict direction
-    const baseBias = isFake ? 0.65 : 0.30; // bias toward overall verdict
+    const baseBias = isFake ? 0.65 : 0.28;
     let fp = clamp(baseBias + (Math.random() - 0.5) * 0.5, 0.05, 0.95);
-    const fv  = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
-    const fc  = fv === 'fake' ? fp : (1 - fp); // confidence always >= 0.5
+    const fv = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
+    const fc = fv === 'fake' ? fp : (1 - fp);
     return {
-      frame_index:    i * 2,
-      timestamp_sec:  parseFloat((i * 1.4).toFixed(2)),
-      cnn_label:      fv,
-      cnn_confidence: parseFloat(fc.toFixed(4)),
-      fake_prob:      parseFloat(fp.toFixed(4)),
-      verdict:        fv,
-      thumbnail_b64:  '',
+      frame_index:       i * 2,
+      timestamp_sec:     parseFloat((i * 1.4).toFixed(2)),
+      cnn_label:         fv,
+      cnn_confidence:    parseFloat(fc.toFixed(4)),
+      fake_prob:         parseFloat(fp.toFixed(4)),
+      verdict:           fv,
+      thumbnail_b64:     '',
       frame_explanation: fv === 'fake'
         ? `Frame ${i * 2}: CNN detected synthetic patterns with ${(fp * 100).toFixed(0)}% fake probability.`
         : `Frame ${i * 2}: CNN found no significant deepfake artefacts.`
     };
   });
 
-  // For video, recalculate overall fake_prob as mean of frames
   let overallFakeProb = fakeProbRaw;
   if (frameResults) {
     overallFakeProb = frameResults.reduce((s, f) => s + f.fake_prob, 0) / frameResults.length;
@@ -1070,6 +1001,9 @@ function makeHelpers(doc, C, W, M) {
   return { fillBg, sectionHead, chip, prose, hr, footer, safeStr, T };
 }
 
+// ═════════════════════════════════════════════════════════════
+//  IMAGE PDF
+// ═════════════════════════════════════════════════════════════
 async function buildImagePDF(jsPDF, result) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const C = palette(); const W = 210, M = 16;
@@ -1098,7 +1032,7 @@ async function buildImagePDF(jsPDF, result) {
   let y = 48;
   doc.setFillColor(...C.bg1); doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'F');
   doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'S');
-  [['FILE', M+4],['TYPE', M+90],['FAKE PROBABILITY', M+132]].forEach(([lbl,x]) => { doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.text(lbl,x,y+5.5); });
+  [['FILE', M+4],['TYPE', M+90],['FAKE PROBABILITY', M+132]].forEach(([lbl,x]) => { doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'bold'); doc.text(lbl,x,y+5.5); });
   const shortName = fileName.length > 42 ? fileName.slice(0,39)+'...' : fileName;
   doc.setTextColor(...C.t0); doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.text(shortName, M+4, y+12); doc.text('IMAGE', M+90, y+12);
   doc.setTextColor(...verdictC); doc.setFont('helvetica','bold'); doc.text(`${(fakeProb*100).toFixed(1)}%`, M+132, y+12);
@@ -1163,6 +1097,9 @@ async function decodeThumbnail(b64) {
   });
 }
 
+// ═════════════════════════════════════════════════════════════
+//  VIDEO PDF
+// ═════════════════════════════════════════════════════════════
 async function buildVideoPDF(jsPDF, result) {
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const C=palette(); const W=210,M=16;
@@ -1205,7 +1142,7 @@ async function buildVideoPDF(jsPDF, result) {
 //  HISTORY
 // ═════════════════════════════════════════════════════════════
 function pushHistory(file, result) {
-  const previewUrl = currentMode === 'image' ? (lastPreviewUrl || '') : '';
+  const previewUrl = fileIsImage(file) ? (lastPreviewUrl || '') : '';
   analysisHistory.unshift({
     id: Date.now(), name: file.name,
     type: result.media_type || currentMode,
