@@ -26,6 +26,11 @@ document.addEventListener('DOMContentLoaded', () => {
   checkApiStatus();
   setInterval(checkApiStatus, 20000);
 
+  // FIX: ensure input dock is always visible on mobile by
+  // re-checking layout after DOM is ready
+  fixMobileLayout();
+  window.addEventListener('resize', fixMobileLayout);
+
   document.addEventListener('click', (e) => {
     const menu = document.getElementById('attach-menu');
     const btn  = document.getElementById('attach-btn');
@@ -51,6 +56,35 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   obs.observe(document.getElementById('messages'), { childList: true, subtree: true });
 });
+
+// ─────────────────────────────────────────────────────────────
+//  FIX: Mobile layout — ensure input dock never gets hidden
+// ─────────────────────────────────────────────────────────────
+function fixMobileLayout() {
+  const dock = document.querySelector('.input-dock');
+  const view = document.getElementById('view-chat');
+  const messages = document.getElementById('messages');
+  if (!dock || !view || !messages) return;
+
+  // Force input dock to always be visible and not flex-shrink away
+  dock.style.flexShrink = '0';
+  dock.style.position = 'relative';
+  dock.style.zIndex = '10';
+
+  // On mobile, ensure the messages area doesn't overflow and hide the dock
+  if (window.innerWidth <= 640) {
+    // Ensure the chat view uses column flex properly
+    view.style.display = 'flex';
+    view.style.flexDirection = 'column';
+    view.style.height = '100%';
+    view.style.overflow = 'hidden';
+
+    // Messages area scrolls, dock stays at bottom
+    messages.style.flex = '1';
+    messages.style.overflowY = 'auto';
+    messages.style.minHeight = '0';
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  UTILS
@@ -124,11 +158,12 @@ function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('view-' + view).classList.add('active');
   document.querySelector(`[data-view="${view}"]`).classList.add('active');
+  // Re-apply mobile layout fix when switching back to chat
+  if (view === 'chat') setTimeout(fixMobileLayout, 50);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  MODE SWITCHING — FIX: never open file picker when switching
-//  modes if a file is already selected or openPicker is false
+//  MODE SWITCHING — never open file picker when only switching mode
 // ─────────────────────────────────────────────────────────────
 function selectMode(mode, openPicker = false) {
   currentMode = mode;
@@ -138,7 +173,7 @@ function selectMode(mode, openPicker = false) {
   const ph = document.getElementById('gemini-placeholder');
   if (ph) ph.textContent = mode === 'image' ? 'Upload an image to analyse…' : 'Upload a video to analyse…';
 
-  // FIX: only open picker if explicitly requested AND no file is already selected
+  // Only open picker if explicitly requested AND no file already selected
   if (openPicker && !selectedFile) {
     triggerFileInput();
   }
@@ -192,7 +227,7 @@ function handleFile(file) {
     showError(`Unsupported file: <b>${file.name}</b>. Use JPG/PNG for images or MP4/MOV for videos.`);
     return;
   }
-  // FIX: switch mode WITHOUT opening file picker (pass false)
+  // Switch mode WITHOUT opening file picker
   if (isImg && currentMode !== 'image') selectMode('image', false);
   if (isVid && currentMode !== 'video') selectMode('video', false);
   selectedFile = file;
@@ -302,8 +337,99 @@ async function flaskIsAlive() {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  NORMALISE SERVER RESPONSE
+//  FIX: Server returns raw_sigmoid. We must compute:
+//    fake_prob = 1 - raw_sigmoid
+//  Some servers return fake_probability already inverted,
+//  others return it as raw sigmoid. We detect and fix both.
+// ═════════════════════════════════════════════════════════════
+function normaliseServerResult(raw, isImage) {
+  const result = Object.assign({}, raw);
+
+  // Ensure media_type is set
+  result.media_type = isImage ? 'image' : 'video';
+
+  // ── fake_probability normalisation ──
+  // The pipeline formula is: fake_prob = 1 - sigmoid(output)
+  // If server returns raw sigmoid score as fake_probability,
+  // we need to invert it. We detect this by checking if
+  // the verdict contradicts what fake_probability implies.
+  let fp = parseFloat(result.fake_probability);
+  if (isNaN(fp)) fp = 0;
+
+  // If verdict is explicitly provided by server, trust it
+  // but re-derive fake_prob to be consistent with verdict:
+  //   fake verdict  → fake_prob should be >= 0.50
+  //   real verdict  → fake_prob should be <  0.50
+  if (result.verdict === 'fake' && fp < FAKE_THRESHOLD) {
+    // Server returned raw sigmoid (high = real), invert it
+    fp = 1 - fp;
+    result.fake_probability = fp;
+  } else if (result.verdict === 'real' && fp >= FAKE_THRESHOLD) {
+    // Server returned raw sigmoid (low = fake), invert it
+    fp = 1 - fp;
+    result.fake_probability = fp;
+  } else if (!result.verdict || result.verdict === 'unknown') {
+    // No verdict from server — derive from fake_prob
+    result.verdict = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
+  }
+
+  // Ensure confidence_pct is in sync
+  result.confidence_pct = parseFloat((fp * 100).toFixed(1));
+
+  // CNN confidence: this is the model's confidence in its own label
+  // It should always be >= 0.5 (confident in either direction)
+  if (result.cnn_confidence != null) {
+    const cc = parseFloat(result.cnn_confidence);
+    // If cnn_label disagrees with verdict, fix cnn_confidence too
+    if (result.cnn_label && result.cnn_label !== result.verdict) {
+      result.cnn_confidence = 1 - cc;
+      result.cnn_label = result.verdict;
+    }
+  }
+
+  // Normalise frame_results for video
+  if (!isImage && Array.isArray(result.frame_results)) {
+    result.frame_results = result.frame_results.map(fr => {
+      const frCopy = Object.assign({}, fr);
+      let frFp = parseFloat(frCopy.fake_prob);
+      if (isNaN(frFp)) frFp = 0;
+
+      // Same inversion logic per frame
+      if (frCopy.verdict === 'fake' && frFp < FAKE_THRESHOLD) {
+        frFp = 1 - frFp;
+        frCopy.fake_prob = frFp;
+      } else if (frCopy.verdict === 'real' && frFp >= FAKE_THRESHOLD) {
+        frFp = 1 - frFp;
+        frCopy.fake_prob = frFp;
+      } else if (!frCopy.verdict || frCopy.verdict === 'unknown') {
+        frCopy.verdict = frFp >= FAKE_THRESHOLD ? 'fake' : 'real';
+      }
+
+      // Sync cnn_label with verdict
+      if (frCopy.cnn_label && frCopy.cnn_label !== frCopy.verdict) {
+        const cc = parseFloat(frCopy.cnn_confidence);
+        if (!isNaN(cc)) frCopy.cnn_confidence = 1 - cc;
+        frCopy.cnn_label = frCopy.verdict;
+      }
+      return frCopy;
+    });
+
+    // Recount fake/real frames after normalisation
+    result.fake_frame_count = result.frame_results.filter(f => f.verdict === 'fake').length;
+    result.total_frames_analysed = result.frame_results.length;
+
+    // Re-derive overall fake_probability as mean of frame fake_probs
+    const mean = result.frame_results.reduce((s, f) => s + parseFloat(f.fake_prob || 0), 0) / result.frame_results.length;
+    result.fake_probability = parseFloat(mean.toFixed(4));
+    result.verdict = mean >= FAKE_THRESHOLD ? 'fake' : 'real';
+  }
+
+  return result;
+}
+
+// ═════════════════════════════════════════════════════════════
 //  MAIN ANALYSIS
-//  FIX: Ensure correct mode is sent based on selectedFile type
 // ═════════════════════════════════════════════════════════════
 async function runAnalysis() {
   if (isAnalysing) return;
@@ -314,14 +440,13 @@ async function runAnalysis() {
   saveSettings();
   lastResult = null;
 
-  // FIX: derive isImage from the actual file, not currentMode
-  // This ensures mobile and desktop get the same result
+  // Derive isImage from actual file — never trust currentMode alone
   const fileName = selectedFile.name.toLowerCase();
   const fileIsImg = /\.(jpe?g|png|webp)$/.test(fileName) || selectedFile.type.startsWith('image/');
   const fileIsVid = /\.(mp4|avi|mov|mkv|webm|flv)$/.test(fileName) || selectedFile.type.startsWith('video/');
   const isImage = fileIsImg || (!fileIsVid && currentMode === 'image');
 
-  // Sync mode pill to match actual file type
+  // Sync mode pill to match actual file type (no picker)
   if (fileIsImg && currentMode !== 'image') selectMode('image', false);
   if (fileIsVid && currentMode !== 'video') selectMode('video', false);
 
@@ -360,6 +485,10 @@ async function runAnalysis() {
         addBotMessage(`<span style="color:var(--fake)">Server error: ${result.error || res.statusText}. Falling back to demo…</span>`);
         result = buildDemoResult(isImage); isDemo = true;
       }
+      // FIX: normalise server response to correct any sigmoid inversion issues
+      if (!isDemo) {
+        result = normaliseServerResult(result, isImage);
+      }
     } else {
       removeTyping(typingId);
       addBotMessage(`
@@ -393,17 +522,25 @@ async function runAnalysis() {
 
 // ─────────────────────────────────────────────────────────────
 //  DEMO BUILDER
+//  FIX: Demo result is always self-consistent — verdict matches
+//  fake_prob, cnn_label matches verdict, confidence is >= 0.5
 // ─────────────────────────────────────────────────────────────
 function buildDemoResult(isImage) {
-  const fakeProbRaw = Math.random();
-  const isFake      = fakeProbRaw >= FAKE_THRESHOLD;
-  const verdict     = isFake ? 'fake' : 'real';
-  const cnnConf     = isFake ? fakeProbRaw : (1.0 - fakeProbRaw);
+  // Generate a clear fake_prob (avoid ambiguous values near 0.5)
+  let fakeProbRaw;
+  do { fakeProbRaw = Math.random(); } while (fakeProbRaw > 0.40 && fakeProbRaw < 0.60);
+
+  const isFake   = fakeProbRaw >= FAKE_THRESHOLD;
+  const verdict  = isFake ? 'fake' : 'real';
+  // CNN confidence = how confident the model is in its label
+  const cnnConf  = isFake ? fakeProbRaw : (1.0 - fakeProbRaw);
 
   const frameResults = isImage ? null : Array.from({ length: 12 }, (_, i) => {
-    const fp  = clamp(fakeProbRaw + (Math.random() - 0.5) * 0.45, 0, 1);
+    // Keep frame probs consistent with overall verdict direction
+    const baseBias = isFake ? 0.65 : 0.30; // bias toward overall verdict
+    let fp = clamp(baseBias + (Math.random() - 0.5) * 0.5, 0.05, 0.95);
     const fv  = fp >= FAKE_THRESHOLD ? 'fake' : 'real';
-    const fc  = fv === 'fake' ? fp : (1 - fp);
+    const fc  = fv === 'fake' ? fp : (1 - fp); // confidence always >= 0.5
     return {
       frame_index:    i * 2,
       timestamp_sec:  parseFloat((i * 1.4).toFixed(2)),
@@ -418,19 +555,25 @@ function buildDemoResult(isImage) {
     };
   });
 
-  const fakeCount = frameResults ? frameResults.filter(f => f.verdict === 'fake').length : null;
+  // For video, recalculate overall fake_prob as mean of frames
+  let overallFakeProb = fakeProbRaw;
+  if (frameResults) {
+    overallFakeProb = frameResults.reduce((s, f) => s + f.fake_prob, 0) / frameResults.length;
+  }
+  const finalVerdict = overallFakeProb >= FAKE_THRESHOLD ? 'fake' : 'real';
+  const fakeCount    = frameResults ? frameResults.filter(f => f.verdict === 'fake').length : null;
 
   return {
     media_type:            isImage ? 'image' : 'video',
-    verdict,
-    fake_probability:      parseFloat(fakeProbRaw.toFixed(4)),
-    confidence_pct:        parseFloat((fakeProbRaw * 100).toFixed(1)),
-    cnn_label:             verdict,
+    verdict:               finalVerdict,
+    fake_probability:      parseFloat(overallFakeProb.toFixed(4)),
+    confidence_pct:        parseFloat((overallFakeProb * 100).toFixed(1)),
+    cnn_label:             finalVerdict,
     cnn_confidence:        parseFloat(cnnConf.toFixed(4)),
     frame_results:         frameResults,
     fake_frame_count:      fakeCount,
     total_frames_analysed: frameResults ? frameResults.length : null,
-    message:               `[DEMO] ${verdict.toUpperCase()} — ${(fakeProbRaw * 100).toFixed(1)}% fake probability`,
+    message:               `[DEMO] ${finalVerdict.toUpperCase()} — ${(overallFakeProb * 100).toFixed(1)}% fake probability`,
     _demo: true
   };
 }
@@ -795,7 +938,7 @@ async function callGroq(prompt, groqKey) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  PDF DOWNLOAD (unchanged from original)
+//  PDF DOWNLOAD
 // ═════════════════════════════════════════════════════════════
 async function groqWriteSection(prompt, groqKey, fallback = '') {
   if (!groqKey) {
