@@ -201,6 +201,19 @@
     @media (max-width: 380px) {
       .gemini-mode-pill span:not(svg) { display: none; }
       .gemini-placeholder { font-size: 0.72rem; }
+      /* ── VIEW Isolation Fix ────────────────────────────────────
+       Prevents non-active views from leaking into layout on
+       mobile — some browsers keep flex:none children in flow
+       even with display:none unless explicitly forced out.
+      ──────────────────────────────────────────────────────────── */
+      .view:not(.active) {
+        display: none !important;
+        height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        flex: none !important;
+      }
     }
   </style>
 </head>
