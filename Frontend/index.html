@@ -102,7 +102,7 @@
     .eyebrow-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-blue); animation: blink 1.4s infinite; }
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.2} }
     .hero-h1 {
-      font-family: var(--font-ui); font-size: clamp(2.4rem, 6vw, 5rem);
+      font-family: var(--font-ui); font-size: clamp(2.2rem, 6vw, 5rem);
       font-weight: 700; line-height: 1.08; letter-spacing: -0.03em;
       color: var(--text); margin-bottom: 20px;
       position: relative; z-index: 1;
@@ -112,7 +112,7 @@
     .h1-strike { position: relative; color: var(--text-3); display: inline-block; }
     .h1-strike::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2.5px; background: var(--fake); transform: rotate(-1.5deg); }
     .hero-sub {
-      font-size: clamp(0.88rem, 1.8vw, 1rem); color: var(--text-2);
+      font-size: clamp(0.84rem, 1.8vw, 1rem); color: var(--text-2);
       max-width: 540px; margin: 0 auto 36px; line-height: 1.78;
       position: relative; z-index: 1;
       animation: fadeUp 0.5s 0.2s ease both;
@@ -158,7 +158,7 @@
     }
     .db-dot { width: 9px; height: 9px; border-radius: 50%; }
     .db-r { background: #ff5f57; } .db-y { background: #febc2e; } .db-g { background: #28c840; }
-    .db-url { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); }
+    .db-url { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .demo-body { padding: 22px; }
     .demo-verdict-row {
       display: flex; align-items: center; gap: 12px;
@@ -193,7 +193,7 @@
     .sec { position: relative; z-index: 1; }
     .sec-inner { max-width: 1020px; margin: 0 auto; padding: 96px 44px; }
     .sec-eyebrow { font-family: var(--font-mono); font-size: 0.6rem; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px; }
-    .sec-h2 { font-family: var(--font-ui); font-size: clamp(1.7rem, 3.2vw, 2.6rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); margin-bottom: 12px; }
+    .sec-h2 { font-family: var(--font-ui); font-size: clamp(1.5rem, 3.2vw, 2.6rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); margin-bottom: 12px; }
     .sec-desc { font-size: 0.86rem; color: var(--text-2); max-width: 460px; line-height: 1.78; }
 
     /* ══ HOW IT WORKS ══ */
@@ -280,6 +280,7 @@
       padding: 17px 0; cursor: pointer; gap: 13px;
       font-family: var(--font-ui); font-size: 0.83rem; font-weight: 500; color: var(--text);
       user-select: none; transition: color 0.2s;
+      min-height: 44px;
     }
     .faq-q:hover { color: var(--accent-blue); }
     .faq-ico { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.25s; color: var(--text-3); font-size: 0.75rem; }
@@ -291,7 +292,7 @@
     /* ══ CTA ══ */
     .cta-sec { position: relative; z-index: 1; padding: 96px 24px; text-align: center; overflow: hidden; }
     .cta-glow { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(66,133,244,0.06) 0%, transparent 70%); }
-    .cta-sec h2 { font-family: var(--font-ui); font-size: clamp(1.7rem, 3.5vw, 3rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.025em; color: var(--text); margin-bottom: 14px; position: relative; z-index: 1; }
+    .cta-sec h2 { font-family: var(--font-ui); font-size: clamp(1.5rem, 3.5vw, 3rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.025em; color: var(--text); margin-bottom: 14px; position: relative; z-index: 1; }
     .cta-sec p { font-size: 0.88rem; color: var(--text-2); max-width: 440px; margin: 0 auto 32px; line-height: 1.78; position: relative; z-index: 1; }
     .cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
     .tech-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 32px; position: relative; z-index: 1; }
@@ -324,24 +325,55 @@
       .fc.fc-big { grid-column: 1; display: flex; flex-direction: column; }
       .sec-inner { padding: 72px 28px; }
     }
+
     @media (max-width: 768px) {
       .nav-links { display: none; }
       .hamburger { display: flex; }
       .feat-grid { grid-template-columns: 1fr; }
       .demo-chips { grid-template-columns: repeat(2, 1fr); }
-      .stat-cell { border-right: none; border-bottom: 1px solid var(--border); min-width: 50%; }
+      /* Stat strip: 2×2 grid */
+      .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); max-width: 100%; }
+      .stat-cell { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat-cell:nth-child(odd) { border-right: 1px solid var(--border); }
+      .stat-cell:nth-child(3),
       .stat-cell:last-child { border-bottom: none; }
-      footer { padding: 18px 20px; flex-direction: column; text-align: center; }
+      footer { padding: 18px 20px; flex-direction: column; align-items: center; text-align: center; }
       .fl-links { justify-content: center; }
     }
+
     @media (max-width: 480px) {
       .steps-grid { grid-template-columns: 1fr; }
-      .hero-h1 { font-size: 2.1rem; }
+      .hero-h1 { font-size: 2rem; }
       .hero-btns { flex-direction: column; width: 100%; }
       .btn-p, .btn-g { width: 100%; justify-content: center; }
-      .pipe-metrics { grid-template-columns: 1fr 1fr; }
+      .pipe-metrics { grid-template-columns: repeat(2, 1fr); }
+      /* Keep 2-col chips on mobile — 1-col is too stretched */
       .demo-chips { grid-template-columns: repeat(2, 1fr); }
+      .sec-inner { padding: 52px 18px; }
+      .demo-body { padding: 14px; }
+      .fc { padding: 18px; }
+      .fc.fc-big { padding: 18px; }
+      .cta-sec { padding: 64px 18px; }
+      .cta-btns { flex-direction: column; width: 100%; }
+      .cta-btns .btn-p,
+      .cta-btns .btn-g { width: 100%; justify-content: center; }
+      .faq-q { font-size: 0.8rem; padding: 14px 0; }
+      .topnav { padding: 0 16px; }
+      /* Hero demo on mobile: tighten */
+      .hero-demo { margin-top: 36px; }
+      /* Pipe steps: smaller padding */
+      .ps { padding: 11px 12px; }
     }
+
+    @media (max-width: 380px) {
+      .hero-h1 { font-size: 1.75rem; }
+      .hero-sub { font-size: 0.8rem; }
+      .sn { font-size: 1.5rem; }
+      .hero-eyebrow { font-size: 0.55rem; padding: 5px 10px; }
+      .hero-btns { gap: 8px; }
+    }
+
+    /* Mobile nav open state */
     .nav-links.open {
       display: flex; flex-direction: column; list-style: none;
       position: fixed; inset: 0; top: 56px;
@@ -349,6 +381,10 @@
       align-items: center; justify-content: center; gap: 6px; z-index: 190;
     }
     .nav-links.open a { font-size: 1.1rem; padding: 13px 26px; color: var(--text); }
+    .nav-links.open a.nav-cta {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)) !important;
+      color: #fff !important;
+    }
   </style>
 </head>
 <body>
@@ -672,14 +708,27 @@
   window.addEventListener('scroll', () => {
     document.getElementById('topnav').classList.toggle('stuck', window.scrollY > 20);
   }, { passive: true });
-  function toggleNav() { document.getElementById('nav-links').classList.toggle('open'); }
-  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => document.getElementById('nav-links').classList.remove('open')));
+
+  function toggleNav() {
+    const links = document.getElementById('nav-links');
+    const ham = document.getElementById('hamburger');
+    links.classList.toggle('open');
+    ham.classList.toggle('open');
+  }
+  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => {
+    document.getElementById('nav-links').classList.remove('open');
+    document.getElementById('hamburger').classList.remove('open');
+  }));
+
   function toggleFaq(el) {
     const item = el.closest('.faq-item'), wasOpen = item.classList.contains('open');
     document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
     if (!wasOpen) item.classList.add('open');
   }
-  const obs = new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('vis'); }), { threshold: 0.08 });
+
+  const obs = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('vis');
+  }), { threshold: 0.08 });
   document.querySelectorAll('.fi').forEach(el => obs.observe(el));
 </script>
 </body>
