@@ -2,12 +2,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:          #131314;
-  --bg2:         #1e1f20;
-  --bg3:         #28292a;
-  --bg4:         #323334;
-  --border:      rgba(255,255,255,0.08);
-  --border2:     rgba(255,255,255,0.14);
+  --bg:          #0f1011;
+  --bg2:         #1a1b1c;
+  --bg3:         #242526;
+  --bg4:         #2e2f30;
+  --border:      rgba(255,255,255,0.07);
+  --border2:     rgba(255,255,255,0.12);
   --accent-blue: #4285f4;
   --accent-pur:  #8b5cf6;
   --accent-cyan: #06b6d4;
@@ -26,7 +26,10 @@
   --font-mono:   'JetBrains Mono', monospace;
 }
 
-html, body { height: 100%; overflow: hidden; }
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
 
 body {
   background: var(--bg);
@@ -37,10 +40,12 @@ body {
   line-height: 1.6;
 }
 
-/* ── SIDEBAR ──────────────────────────────────── */
+/* ══════════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════════ */
 .sidebar {
   width: var(--sidebar-w);
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg);
   border-right: 1px solid var(--border);
   display: flex;
@@ -118,6 +123,29 @@ body {
 }
 .nav-item svg { flex-shrink: 0; }
 
+.back-home-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 50px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--trans);
+  margin-top: 6px;
+}
+.back-home-btn:hover {
+  background: rgba(66,133,244,0.08);
+  border-color: rgba(66,133,244,0.25);
+  color: var(--accent-blue);
+}
+
 .sidebar-footer {
   padding: 12px 4px 4px;
   border-top: 1px solid var(--border);
@@ -143,8 +171,80 @@ body {
 .dot-warn { background: var(--warn); }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
 
-/* ── MAIN ─────────────────────────────────────── */
-/* CRITICAL: flex-direction:column so mobile topbar stacks above view */
+/* ══════════════════════════════════════════════
+   MOBILE TOP BAR
+   Lives INSIDE .main flex column — not fixed.
+   Pushes content down naturally.
+══════════════════════════════════════════════ */
+.mobile-topbar {
+  display: none;
+  flex-shrink: 0;
+  height: 52px;
+  width: 100%;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border2);
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  z-index: 20;
+}
+
+.mobile-ham {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--trans), color var(--trans);
+}
+.mobile-ham:hover { background: var(--bg4); color: var(--text); }
+
+.mobile-brand {
+  flex: 1;
+  display: flex; align-items: center; gap: 8px;
+}
+.mobile-brand-name {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.mobile-home-link {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px;
+  border-radius: 50px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: all var(--trans);
+}
+.mobile-home-link:hover { background: var(--bg3); color: var(--text); }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(3px);
+  z-index: 400;
+}
+.sidebar-overlay.visible { display: block; }
+
+/* ══════════════════════════════════════════════
+   MAIN LAYOUT
+   KEY: flex-direction column so topbar + view
+   stack vertically. View fills remaining space.
+══════════════════════════════════════════════ */
 .main {
   flex: 1;
   min-width: 0;
@@ -154,33 +254,56 @@ body {
   overflow: hidden;
 }
 
-/* CRITICAL: view must use flex:1 to fill remaining height after topbar */
+/* ── VIEW BASE ────────────────────────────────── */
 .view {
   display: none;
   flex-direction: column;
-  flex: 1;           /* ← fills space left after mobile-topbar */
-  min-height: 0;     /* ← allows shrinking in flex context */
+  flex: 1;
+  min-height: 0;     /* critical for flex children to scroll */
   overflow: hidden;
 }
 .view.active { display: flex; }
 
-/* ── CHAT VIEW ────────────────────────────────── */
-#view-chat { position: relative; }
+/* ══════════════════════════════════════════════
+   CHAT VIEW — critical flex structure
+   messages: scrollable, fills space
+   input-dock: fixed height, never shrinks
+══════════════════════════════════════════════ */
+#view-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 
 .messages {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;          /* allow shrinking */
   overflow-y: auto;
   padding: 24px 0 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 .messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
 .messages::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
 
-/* ── MESSAGES ─────────────────────────────────── */
+/* Input dock: NEVER shrinks, always visible */
+.input-dock {
+  flex-shrink: 0;
+  padding: 8px 72px 20px;
+  background: var(--bg);
+  position: relative;
+  z-index: 10;
+}
+
+/* ══════════════════════════════════════════════
+   MESSAGES
+══════════════════════════════════════════════ */
 .msg {
   display: flex;
   gap: 0;
@@ -254,19 +377,15 @@ body {
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes tdot { 0%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
 
-/* ── INPUT DOCK ───────────────────────────────── */
-.input-dock {
-  padding: 8px 72px 20px;
-  flex-shrink: 0;
-  position: relative;
-}
-
+/* ══════════════════════════════════════════════
+   INPUT DOCK INTERNALS
+══════════════════════════════════════════════ */
 .gemini-input-card {
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: 26px;
   overflow: visible;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color var(--trans), box-shadow var(--trans);
   position: relative;
 }
 .gemini-input-card:focus-within {
@@ -361,7 +480,11 @@ body {
   border-color: rgba(66,133,244,0.35);
   color: var(--accent-blue);
 }
-.gemini-mode-pill:hover:not(.active) { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+.gemini-mode-pill:hover:not(.active) {
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--border2);
+}
 
 .gemini-placeholder {
   flex: 1 1 0;
@@ -423,6 +546,7 @@ body {
 .adv-field input:focus { border-color: var(--accent-blue); }
 .adv-field input::placeholder { color: var(--text-3); }
 
+/* Attach menu — desktop floats above input */
 .attach-menu {
   position: absolute;
   bottom: calc(100% + 6px); left: 0;
@@ -445,7 +569,9 @@ body {
 .attach-option:hover { background: var(--bg3); }
 .attach-option svg { color: var(--text-2); }
 
-/* ── RESULT COMPONENTS ────────────────────────── */
+/* ══════════════════════════════════════════════
+   RESULT COMPONENTS
+══════════════════════════════════════════════ */
 .verdict-banner {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px;
@@ -466,7 +592,7 @@ body {
 .verdict-banner.real .verdict-label { color: var(--real); }
 .verdict-sub { font-size: 0.78rem; color: var(--text-2); margin-top: 2px; }
 
-/* ── CHIP GRID — CSS grid, NOT flex ────────────── */
+/* ── CHIP GRID ────────────────────────────────── */
 .chip-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -537,7 +663,7 @@ body {
 .td-fake { color: var(--fake); font-weight: 600; }
 .td-real { color: var(--real); font-weight: 600; }
 
-/* ── FRAME GRID — CSS grid ────────────────────── */
+/* ── FRAME GRID ───────────────────────────────── */
 .frames-header {
   font-size: 0.75rem; font-weight: 500; color: var(--text-2);
   text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 8px;
@@ -647,7 +773,9 @@ canvas.timeline-chart { width: 100% !important; height: 110px !important; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── HISTORY VIEW ─────────────────────────────── */
+/* ══════════════════════════════════════════════
+   HISTORY VIEW
+══════════════════════════════════════════════ */
 .view-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 20px 32px 12px; flex-shrink: 0;
@@ -665,6 +793,7 @@ canvas.timeline-chart { width: 100% !important; height: 110px !important; }
 .history-list {
   flex: 1; overflow-y: auto; padding: 8px 32px 24px;
   display: flex; flex-direction: column; gap: 8px;
+  -webkit-overflow-scrolling: touch;
 }
 .empty-state { color: var(--text-3); font-size: 0.85rem; text-align: center; margin-top: 60px; }
 
@@ -684,10 +813,13 @@ canvas.timeline-chart { width: 100% !important; height: 110px !important; }
 .verdict-pill.fake { background: rgba(234,67,53,0.12); color: var(--fake); }
 .verdict-pill.real { background: rgba(52,168,83,0.1);  color: var(--real); }
 
-/* ── SETTINGS VIEW ────────────────────────────── */
+/* ══════════════════════════════════════════════
+   SETTINGS VIEW
+══════════════════════════════════════════════ */
 .settings-body {
   flex: 1; overflow-y: auto; padding: 8px 32px 24px;
   display: flex; flex-direction: column; gap: 16px;
+  -webkit-overflow-scrolling: touch;
 }
 .settings-card {
   background: var(--bg2); border: 1px solid var(--border);
@@ -736,7 +868,7 @@ code {
 }
 
 /* ══════════════════════════════════════════════
-   TABLET (≤900px)
+   TABLET  ≤900px
 ══════════════════════════════════════════════ */
 @media (max-width: 900px) {
   .frame-grid { grid-template-columns: repeat(3, 1fr); }
@@ -753,88 +885,129 @@ code {
 }
 
 /* ══════════════════════════════════════════════
-   MOBILE (≤640px) — structural layout overrides
+   MOBILE  ≤640px
+   CRITICAL RULES — do not remove or reorder
 ══════════════════════════════════════════════ */
 @media (max-width: 640px) {
 
-  /* Hide desktop sidebar permanently — it's a drawer */
+  /* 1. Show mobile topbar */
+  .mobile-topbar { display: flex; }
+
+  /* 2. Sidebar becomes a slide-in drawer */
   .sidebar {
-    position: fixed;
+    position: fixed !important;
     top: 0; left: 0; bottom: 0;
     width: 280px;
+    height: 100%;
+    min-height: 100%;
     transform: translateX(-100%);
     z-index: 500;
     transition: transform 0.28s ease;
     box-shadow: 6px 0 28px rgba(0,0,0,0.6);
+    /* Keep padding/flex from base rules */
   }
   .sidebar.open { transform: translateX(0); }
 
-  .sidebar-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(3px);
-    z-index: 400;
-    display: none;
+  /* 3. Main fills full viewport height */
+  .main {
+    height: 100vh;
+    height: 100dvh; /* dynamic viewport height for mobile browsers */
+    overflow: hidden;
   }
-  .sidebar-overlay.visible { display: block; }
 
-  /* Messages: reset top padding — topbar is in-flow above */
-  .messages { padding: 12px 0 12px; }
+  /* 4. Chat view: strict flex column filling remaining height */
+  #view-chat {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
 
-  /* Compact message padding */
-  .msg.bot  { padding: 10px 12px 10px 12px; }
-  .msg.user { padding: 6px 12px 6px 12px; }
+  /* 5. Messages scrolls, fills available space */
+  #view-chat .messages {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 12px 0 8px !important;
+  }
+
+  /* 6. Input dock: ALWAYS visible at bottom, never shrinks */
+  .input-dock {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    padding: 6px 10px !important;
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)) !important;
+    background: var(--bg) !important;
+    border-top: 1px solid var(--border) !important;
+    position: relative !important;
+    z-index: 10 !important;
+  }
+
+  /* 7. Messages padding */
+  .msg.bot  { padding: 10px 12px; }
+  .msg.user { padding: 6px 12px; }
   .msg.user .msg-bubble { max-width: 88vw; font-size: 0.84rem; }
 
-  /* 2-col chip grid on mobile */
-  .chip-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
-  .chip      { padding: 8px 10px; }
-  .chip-label { font-size: 0.58rem; }
-  .chip-value { font-size: 0.85rem; }
+  /* 8. Input card internals */
+  .gemini-input-card { border-radius: 20px; }
+  .gemini-input-row  { padding: 8px 10px; min-height: 50px; gap: 2px; }
 
-  /* 2-col frame grid on mobile */
-  .frame-grid    { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
-  .frames-header { font-size: 0.68rem; }
-
-  .verdict-banner { padding: 12px 14px; gap: 10px; }
-  .verdict-icon   { width: 32px; height: 32px; font-size: 1rem; }
-  .verdict-label  { font-size: 0.88rem; }
-  .verdict-sub    { font-size: 0.72rem; }
-
-  .input-dock       { padding: 6px 10px 14px; }
-  .gemini-input-row { padding: 8px 10px; min-height: 50px; gap: 2px; }
-
-  .gemini-mode-pill     { padding: 5px 8px; font-size: 0.7rem; gap: 3px; }
-  .gemini-mode-pill svg { width: 12px; height: 12px; }
-  .gemini-placeholder   { font-size: 0.78rem; padding: 0 4px; }
-
-  .view-header   { padding: 14px 16px 10px; }
-  .history-list  { padding: 8px 16px 80px; }
-  .settings-body { padding: 8px 16px 80px; }
-
-  .history-item  { padding: 12px; gap: 10px; }
-  .history-thumb { width: 48px; height: 34px; }
-  .history-icon  { width: 48px; height: 34px; }
-
-  .explanation-block { padding: 12px 14px; font-size: 0.82rem; }
-  .download-pdf-btn  { width: 100%; justify-content: center; padding: 11px 16px; }
-
+  .gemini-mode-pill      { padding: 5px 8px; font-size: 0.7rem; gap: 3px; }
+  .gemini-mode-pill svg  { width: 12px; height: 12px; }
+  .gemini-placeholder    { font-size: 0.78rem; padding: 0 4px; }
   .gemini-advanced-panel { flex-direction: column; }
 
+  /* 9. Attach menu slides up from bottom of screen */
   .attach-menu {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    border-radius: 14px 14px 0 0;
-    padding: 12px 12px 28px;
-    box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
-    animation: slideUpMenu 0.2s ease;
-    z-index: 600;
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; bottom: 0 !important;
+    top: auto !important;
+    border-radius: 18px 18px 0 0 !important;
+    padding: 14px 12px !important;
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 28px)) !important;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.6) !important;
+    animation: slideUpMenu 0.2s ease !important;
+    z-index: 600 !important;
+    background: var(--bg2) !important;
+    border: 1px solid var(--border2) !important;
+    border-bottom: none !important;
   }
   @keyframes slideUpMenu {
     from { transform: translateY(100%); }
     to   { transform: translateY(0); }
   }
   .attach-option { padding: 14px 16px; font-size: 0.9rem; }
+
+  /* 10. Grid adjustments */
+  .chip-grid  { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+  .chip       { padding: 8px 10px; }
+  .chip-label { font-size: 0.58rem; }
+  .chip-value { font-size: 0.85rem; }
+
+  .frame-grid    { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+  .frames-header { font-size: 0.68rem; }
+
+  /* 11. Verdict banner */
+  .verdict-banner { padding: 12px 14px; gap: 10px; }
+  .verdict-icon   { width: 32px; height: 32px; font-size: 1rem; }
+  .verdict-label  { font-size: 0.88rem; }
+  .verdict-sub    { font-size: 0.72rem; }
+
+  /* 12. History / Settings */
+  .view-header   { padding: 14px 16px 10px; }
+  .history-list  { padding: 8px 16px 24px; }
+  .settings-body { padding: 8px 16px 24px; }
+
+  .history-item  { padding: 12px; gap: 10px; }
+  .history-thumb { width: 48px; height: 34px; }
+  .history-icon  { width: 48px; height: 34px; }
+
+  /* 13. Other components */
+  .explanation-block  { padding: 12px 14px; font-size: 0.82rem; }
+  .download-pdf-btn   { width: 100%; justify-content: center; padding: 11px 16px; }
 
   .intro-card  { max-width: 100%; }
   .intro-title { font-size: 1.2rem; }
@@ -847,9 +1020,10 @@ code {
 }
 
 /* ══════════════════════════════════════════════
-   VERY SMALL (≤380px)
+   VERY SMALL  ≤380px
 ══════════════════════════════════════════════ */
 @media (max-width: 380px) {
   .gemini-mode-pill span:not(svg) { display: none; }
   .gemini-placeholder { font-size: 0.72rem; }
+  .chip-value { font-size: 0.78rem; }
 }
