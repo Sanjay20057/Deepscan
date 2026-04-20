@@ -190,13 +190,11 @@ body {
 .messages {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
   padding: 24px 0 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
 }
 .messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
@@ -362,6 +360,7 @@ body {
   padding: 10px 12px;
   min-height: 56px;
   position: relative;
+  flex-wrap: nowrap;
 }
 
 .gemini-icon-btn {
@@ -410,9 +409,10 @@ body {
 }
 .gemini-mode-pill:hover:not(.active) { background: var(--bg3); color: var(--text); border-color: var(--border2); }
 
-/* Placeholder */
+/* Placeholder — clickable to open file picker */
 .gemini-placeholder {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 40px;
   font-size: 0.9rem;
   color: var(--text-3);
   padding: 0 8px;
@@ -426,21 +426,13 @@ body {
 }
 .gemini-placeholder:hover { color: var(--text-2); }
 
-/* Drag overlay */
-.gemini-drag-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  cursor: default;
-}
-
 /* Right actions */
 .gemini-right-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  margin-left: auto;
   position: relative;
   z-index: 2;
 }
@@ -448,6 +440,7 @@ body {
 /* Send button */
 .gemini-send-btn {
   width: 36px; height: 36px;
+  min-width: 36px;
   border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur));
@@ -575,20 +568,26 @@ body {
 
 /* ── CHIP GRID ────────────────────────────────── */
 .chip-grid {
-  display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+  margin: 8px 0 12px;
 }
 .chip {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 12px;
-  min-width: 100px;
+  padding: 8px 10px;
+  min-width: 0;
 }
-.chip-label { font-size: 0.62rem; color: var(--text-3); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 3px; }
+.chip-label { font-size: 0.6rem; color: var(--text-3); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 3px; }
 .chip-value {
   font-family: var(--font-ui);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chip-value.is-fake { color: var(--fake); }
 .chip-value.is-real { color: var(--real); }
@@ -663,7 +662,7 @@ body {
 }
 .frame-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -812,7 +811,6 @@ canvas.timeline-chart { width: 100% !important; height: 110px !important; }
 .history-list {
   flex: 1; overflow-y: auto; padding: 8px 32px 24px;
   display: flex; flex-direction: column; gap: 8px;
-  -webkit-overflow-scrolling: touch;
 }
 .empty-state {
   color: var(--text-3); font-size: 0.85rem; text-align: center; margin-top: 60px;
@@ -852,7 +850,6 @@ canvas.timeline-chart { width: 100% !important; height: 110px !important; }
 .settings-body {
   flex: 1; overflow-y: auto; padding: 8px 32px 24px;
   display: flex; flex-direction: column; gap: 16px;
-  -webkit-overflow-scrolling: touch;
 }
 .settings-card {
   background: var(--bg2); border: 1px solid var(--border);
@@ -921,10 +918,13 @@ code {
    RESPONSIVE — TABLET (≤900px)
 ══════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  .frame-grid { grid-template-columns: repeat(3, 1fr); }
+  .frame-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
   .msg.bot { padding: 12px 24px 12px 16px; }
   .msg.user { padding: 8px 16px 8px 40px; }
+
   .input-dock { padding: 8px 16px 16px; }
+
   .view-header { padding: 16px 20px 10px; }
   .history-list { padding: 8px 20px 20px; }
   .settings-body { padding: 8px 20px 20px; }
@@ -946,8 +946,9 @@ code {
     border-right: 1px solid var(--border2);
     box-shadow: 4px 0 24px rgba(0,0,0,0.5);
   }
-  .sidebar.open { transform: translateX(0); }
-
+  .sidebar.open {
+    transform: translateX(0);
+  }
   .sidebar-overlay {
     display: none;
     position: fixed; inset: 0;
@@ -957,33 +958,45 @@ code {
   }
   .sidebar-overlay.visible { display: block; }
 
-  .sidebar-toggle { display: flex; }
-  .main { padding-top: 0; }
-
-  /* Enough top space to clear hamburger button */
-  .messages {
-    padding: 64px 0 12px;
+  /* Mobile top bar */
+  .sidebar-toggle {
+    display: flex;
   }
 
-  .msg.bot  { padding: 10px 12px 10px 12px; }
-  .msg.user { padding: 6px 12px 6px 12px; }
+  /* Main takes full width, add safe zone for toggle */
+  .main {
+    padding-top: 0;
+  }
+
+  /* Messages: top padding to clear the hamburger + back btn */
+  .messages {
+    padding: 68px 0 12px;
+  }
+
+  /* Messages compact */
+  .msg.bot {
+    padding: 10px 12px 10px 12px;
+  }
+  .msg.user {
+    padding: 6px 12px 6px 12px;
+  }
   .msg.user .msg-bubble {
-    max-width: 85vw;
+    max-width: 88vw;
     font-size: 0.84rem;
   }
 
-  /* Input dock — safe-area for notched phones */
+  /* Input dock */
   .input-dock {
-    padding: 6px 10px calc(env(safe-area-inset-bottom, 0px) + 14px);
+    padding: 6px 10px 14px;
   }
 
   .gemini-input-row {
     padding: 8px 10px;
     min-height: 50px;
-    flex-wrap: nowrap;
     gap: 2px;
   }
 
+  /* Mode pills compact */
   .gemini-mode-pill {
     padding: 5px 8px;
     font-size: 0.7rem;
@@ -991,62 +1004,76 @@ code {
   }
   .gemini-mode-pill svg { width: 12px; height: 12px; }
 
+  /* Placeholder shorter text */
   .gemini-placeholder {
-    font-size: 0.82rem;
-    min-width: 0;
+    font-size: 0.78rem;
+    padding: 0 4px;
   }
 
-  .chip-grid { gap: 6px; }
-  .chip {
-    min-width: 78px;
-    padding: 7px 10px;
+  /* Chip grid: 2 columns on mobile for better readability */
+  .chip-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
   }
+  .chip {
+    padding: 8px 10px;
+  }
+  .chip-label { font-size: 0.58rem; }
   .chip-value { font-size: 0.88rem; }
 
+  /* Verdict banner */
   .verdict-banner {
     padding: 12px 14px;
     gap: 10px;
   }
   .verdict-icon { width: 32px; height: 32px; font-size: 1rem; }
   .verdict-label { font-size: 0.88rem; }
+  .verdict-sub { font-size: 0.72rem; }
 
+  /* Frame grid: 2 columns on mobile */
   .frame-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
   }
+  .frames-header { font-size: 0.68rem; }
 
-  /* Signal wrap: stack vertically, image goes full width */
+  /* Signal wrap stacks */
   .signal-wrap { flex-direction: column; }
   .signal-table { min-width: unset; width: 100%; }
   .analysis-img { max-width: 100%; }
 
+  /* History / Settings */
   .view-header { padding: 14px 16px 10px; }
-  .history-list { padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 80px); }
-  .settings-body { padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 80px); }
+  .history-list { padding: 8px 16px 80px; }
+  .settings-body { padding: 8px 16px 80px; }
 
+  /* History item compact */
   .history-item { padding: 12px; gap: 10px; }
   .history-thumb { width: 48px; height: 34px; }
   .history-icon  { width: 48px; height: 34px; }
 
+  /* Explanation block */
   .explanation-block { padding: 12px 14px; font-size: 0.82rem; }
 
-  /* PDF btn: full width on mobile */
+  /* PDF btn full width */
   .download-pdf-btn {
     width: 100%;
     justify-content: center;
     padding: 11px 16px;
   }
 
-  /* Advanced panel stacks vertically */
-  .gemini-advanced-panel { flex-direction: column; }
+  /* Advanced panel stacks */
+  .gemini-advanced-panel {
+    flex-direction: column;
+  }
 
-  /* Bottom-sheet attach menu */
+  /* Attach menu as bottom sheet on mobile */
   .attach-menu {
     left: 0; right: 0;
     border-radius: 14px 14px 0 0;
     bottom: 0;
     position: fixed;
-    padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    padding: 12px 12px 28px;
     box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
     animation: slideUpMenu 0.2s ease;
   }
@@ -1056,14 +1083,11 @@ code {
   }
   .attach-option { padding: 14px 16px; font-size: 0.9rem; }
 
+  /* Intro card full width on mobile */
   .intro-card { max-width: 100%; }
-  .intro-title { font-size: 1.3rem; }
-
-  .prob-section { margin: 6px 0 10px; }
-
-  /* Frame table compact on mobile */
-  .detail-table { font-size: 0.68rem; }
-  .detail-table th, .detail-table td { padding: 5px 7px; }
+  .intro-title { font-size: 1.2rem; }
+  .intro-body { font-size: 0.82rem; }
+  .intro-steps { font-size: 0.78rem; line-height: 1.9; padding: 12px 14px; }
 }
 
 /* ══════════════════════════════════════════════
@@ -1071,31 +1095,9 @@ code {
 ══════════════════════════════════════════════ */
 @media (max-width: 380px) {
   .gemini-mode-pills { gap: 2px; }
-  /* Hide pill label text, keep icon only */
-  .gemini-mode-pill [data-label] { display: none; }
-  .gemini-placeholder { font-size: 0.76rem; }
-  .chip { min-width: 62px; }
-  .chip-value { font-size: 0.78rem; }
+  /* Hide text labels on pills, show only icons */
+  .gemini-mode-pill span:not(svg) { display: none; }
+  .gemini-placeholder { font-size: 0.72rem; }
   .frame-grid { grid-template-columns: repeat(2, 1fr); }
-  .verdict-label { font-size: 0.82rem; }
-  .verdict-sub { font-size: 0.72rem; }
-}
-
-/* ── Flex layout guards (all screen sizes) ───── */
-.gemini-input-row {
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-}
-.gemini-placeholder {
-  flex: 1 1 0 !important;
-  min-width: 40px !important;
-}
-.gemini-mode-pills      { flex-shrink: 0 !important; }
-.gemini-right-actions   { flex-shrink: 0 !important; margin-left: auto !important; }
-.gemini-icon-btn.gemini-attach { flex-shrink: 0 !important; }
-.gemini-send-btn        { flex-shrink: 0 !important; min-width: 36px !important; }
-
-@media (max-width: 480px) {
-  .gemini-input-row  { gap: 2px !important; padding: 8px 8px !important; }
-  .gemini-mode-pill  { padding: 4px 7px !important; }
+  .chip-grid { grid-template-columns: repeat(2, 1fr); }
 }
