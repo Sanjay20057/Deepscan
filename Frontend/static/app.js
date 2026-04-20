@@ -186,8 +186,12 @@ function handleFile(file) {
   const n = file.name.toLowerCase();
   const isImg = /\.(jpe?g|png|webp)$/.test(n) || file.type.startsWith('image/');
   const isVid = /\.(mp4|avi|mov|mkv|webm|flv)$/.test(n) || file.type.startsWith('video/');
-  if (!isImg && !isVid) {
-    showError(`Unsupported file: <b>${file.name}</b>. Use JPG/PNG for images or MP4/MOV for videos.`);
+  // 5 MB size limit
+  if (file.size > 5 * 1024 * 1024) {
+    showError(
+      `File too large: <b>${file.name}</b> is ${(file.size / 1e6).toFixed(1)} MB. ` +
+      `Maximum allowed size is <b>5 MB</b>.`
+    );
     return;
   }
   if (isImg && currentMode !== 'image') selectMode('image', false);
