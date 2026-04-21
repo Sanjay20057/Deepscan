@@ -1,11 +1,11 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DeepScan — AI Deepfake Detector</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Google+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -24,367 +24,495 @@
       --text:        #e3e3e3;
       --text-2:      #9aa0a6;
       --text-3:      #5f6368;
+      --font-display:'Playfair Display', Georgia, serif;
       --font-ui:     'Google Sans', 'Segoe UI', sans-serif;
-      --font-text:   'Google Sans Text', 'Google Sans', sans-serif;
       --font-mono:   'JetBrains Mono', monospace;
     }
     html { scroll-behavior: smooth; }
     body {
       background: var(--bg); color: var(--text);
-      font-family: var(--font-text); font-size: 14px; line-height: 1.6;
+      font-family: var(--font-ui); font-size: 15px; line-height: 1.6;
       overflow-x: hidden;
     }
+
+    /* ══ NOISE OVERLAY ══ */
     body::before {
       content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      opacity: 0.5;
+      opacity: 0.4;
     }
 
     /* ══ NAV ══ */
     .topnav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 200;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 32px; height: 56px;
+      padding: 0 44px; height: 60px;
       transition: all 0.3s ease;
     }
     .topnav.stuck {
-      background: rgba(19,19,20,0.95); backdrop-filter: blur(20px);
+      background: rgba(19,19,20,0.96); backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
     }
     .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .nav-gem { width: 26px; height: 26px; }
-    .nav-gem svg { width: 26px; height: 26px; }
-    .nav-brand { font-family: var(--font-ui); font-size: 0.95rem; font-weight: 500; color: var(--text); }
+    .nav-gem svg { width: 28px; height: 28px; }
+    .nav-brand { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
     .nav-links { display: flex; align-items: center; gap: 2px; list-style: none; }
     .nav-links a {
       color: var(--text-2); text-decoration: none;
-      font-family: var(--font-ui); font-size: 0.8rem;
-      padding: 6px 13px; border-radius: 50px; transition: all 0.2s;
+      font-family: var(--font-ui); font-size: 0.82rem;
+      padding: 7px 15px; border-radius: 50px; transition: all 0.2s;
     }
     .nav-links a:hover { background: var(--bg3); color: var(--text); }
     .nav-cta {
       background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)) !important;
       color: #fff !important; font-weight: 500 !important;
-      box-shadow: 0 2px 10px rgba(66,133,244,0.22);
+      box-shadow: 0 2px 10px rgba(66,133,244,0.22); border-radius: 50px !important;
     }
-    .nav-cta:hover { opacity: 0.88 !important; transform: translateY(-1px); box-shadow: 0 4px 18px rgba(66,133,244,0.35) !important; }
+    .nav-cta:hover { opacity: 0.88 !important; transform: translateY(-1px); }
     .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
     .hamburger span { display: block; width: 20px; height: 1.5px; background: var(--text-2); border-radius: 2px; transition: all 0.3s; }
 
     /* ══ HERO ══ */
     .hero {
-      position: relative; z-index: 1; min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 100px 24px 80px; text-align: center; overflow: hidden;
+      position: relative; min-height: 100vh;
+      display: grid; grid-template-columns: 1fr 1fr;
+      align-items: center; gap: 0;
+      overflow: hidden; z-index: 1;
     }
-    .hero-bg {
-      position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      background: radial-gradient(ellipse 80% 60% at 50% 30%,
-        rgba(66,133,244,0.07) 0%, rgba(139,92,246,0.04) 40%, transparent 70%);
+    .hero-left {
+      padding: 120px 60px 80px 60px;
+      display: flex; flex-direction: column; justify-content: center;
+      position: relative; z-index: 2;
     }
-    .hero-grid-lines {
-      position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
-      background-size: 64px 64px;
-      mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 80%);
+    .hero-right {
+      position: relative; height: 100vh; overflow: hidden;
     }
+    .hero-right-img {
+      width: 100%; height: 100%; object-fit: cover;
+      filter: brightness(0.45) saturate(0.7);
+    }
+    .hero-right-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(19,19,20,0.9) 0%, rgba(66,133,244,0.08) 60%, transparent 100%);
+    }
+
+    /* Deepfake sample image placeholder */
+    .hero-img-placeholder {
+      width: 100%; height: 100%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .hero-img-placeholder::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(66,133,244,0.03) 2px, rgba(66,133,244,0.03) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(66,133,244,0.03) 2px, rgba(66,133,244,0.03) 4px);
+    }
+    .face-scan-anim {
+      width: 320px; height: 380px;
+      position: relative; display: flex; align-items: center; justify-content: center;
+    }
+    .face-svg { width: 220px; height: 260px; opacity: 0.6; }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-blue), transparent);
+      animation: scanMove 3s linear infinite;
+      box-shadow: 0 0 12px var(--accent-cyan);
+    }
+    @keyframes scanMove {
+      0% { top: 10%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 90%; opacity: 0; }
+    }
+    .corner { position: absolute; width: 20px; height: 20px; border-color: var(--accent-blue); border-style: solid; }
+    .corner-tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+    .corner-tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+    .corner-bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+    .corner-br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+    /* hero overlaid verdict card */
+    .hero-verdict-card {
+      position: absolute; bottom: 48px; left: -60px; z-index: 10;
+      background: rgba(19,19,20,0.92); backdrop-filter: blur(16px);
+      border: 1px solid rgba(234,67,53,0.3); border-left: 3px solid var(--fake);
+      border-radius: 14px; padding: 16px 20px; width: 280px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      animation: fadeUp 0.6s 0.8s ease both; opacity: 0;
+    }
+    .hvc-label { font-family: var(--font-mono); font-size: 0.55rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .hvc-verdict { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 700; color: var(--fake); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+    .hvc-bar { height: 4px; background: var(--bg4); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+    .hvc-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--warn), var(--fake)); border-radius: 2px; animation: fillHvc 2s 1.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+    @keyframes fillHvc { to { width: 78%; } }
+    .hvc-pct { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-2); }
+
+    /* hero rating card */
+    .hero-rating-card {
+      position: absolute; top: 120px; right: -40px; z-index: 10;
+      background: rgba(19,19,20,0.92); backdrop-filter: blur(16px);
+      border: 1px solid var(--border2); border-radius: 14px; padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: fadeUp 0.6s 1s ease both; opacity: 0;
+    }
+    .hrc-stars { color: var(--warn); font-size: 0.7rem; margin-bottom: 4px; letter-spacing: 2px; }
+    .hrc-text { font-size: 0.7rem; color: var(--text-2); margin-bottom: 10px; max-width: 160px; line-height: 1.5; }
+    .hrc-user { display: flex; align-items: center; gap: 8px; }
+    .hrc-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)); display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .hrc-name { font-size: 0.72rem; font-weight: 600; color: var(--text); }
+    .hrc-role { font-size: 0.6rem; color: var(--text-3); }
+
+    /* badges on hero right */
+    .hero-badges {
+      position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 10px; z-index: 10;
+    }
+    .hb { background: rgba(19,19,20,0.85); backdrop-filter: blur(12px); border: 1px solid var(--border2); border-radius: 10px; padding: 9px 13px; display: flex; align-items: center; gap: 8px; }
+    .hb-icon { font-size: 0.85rem; }
+    .hb-text { font-size: 0.65rem; color: var(--text-2); font-family: var(--font-ui); }
+
     .hero-eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
       background: rgba(66,133,244,0.08); border: 1px solid rgba(66,133,244,0.22);
-      border-radius: 50px; padding: 5px 14px;
-      font-family: var(--font-mono); font-size: 0.6rem;
+      border-radius: 50px; padding: 5px 15px;
+      font-family: var(--font-mono); font-size: 0.58rem;
       color: var(--accent-blue); letter-spacing: 0.1em; text-transform: uppercase;
-      margin-bottom: 28px; position: relative; z-index: 1;
+      margin-bottom: 24px; width: fit-content;
       animation: fadeUp 0.5s 0.05s ease both;
     }
     .eyebrow-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-blue); animation: blink 1.4s infinite; }
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.2} }
+
     .hero-h1 {
-      font-family: var(--font-ui); font-size: clamp(2.2rem, 6vw, 5rem);
-      font-weight: 700; line-height: 1.08; letter-spacing: -0.03em;
-      color: var(--text); margin-bottom: 20px;
-      position: relative; z-index: 1;
+      font-family: var(--font-display); font-size: clamp(2.6rem, 5vw, 4.4rem);
+      font-weight: 900; line-height: 1.05; letter-spacing: -0.02em;
+      color: var(--text); margin-bottom: 22px;
       animation: fadeUp 0.5s 0.12s ease both;
     }
     .h1-grad { background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-pur) 50%, var(--accent-cyan) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
     .h1-strike { position: relative; color: var(--text-3); display: inline-block; }
-    .h1-strike::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2.5px; background: var(--fake); transform: rotate(-1.5deg); }
+    .h1-strike::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 3px; background: var(--fake); transform: rotate(-1.5deg); }
+
     .hero-sub {
-      font-size: clamp(0.84rem, 1.8vw, 1rem); color: var(--text-2);
-      max-width: 540px; margin: 0 auto 36px; line-height: 1.78;
-      position: relative; z-index: 1;
+      font-size: 0.9rem; color: var(--text-2);
+      max-width: 440px; margin-bottom: 36px; line-height: 1.8;
       animation: fadeUp 0.5s 0.2s ease both;
     }
     .hero-btns {
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      justify-content: center; position: relative; z-index: 1;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
       animation: fadeUp 0.5s 0.28s ease both;
     }
     .btn-p {
       display: inline-flex; align-items: center; gap: 8px;
       background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur));
       color: #fff; text-decoration: none;
-      font-family: var(--font-ui); font-size: 0.86rem; font-weight: 500;
-      padding: 12px 24px; border-radius: 50px;
-      box-shadow: 0 4px 16px rgba(66,133,244,0.25); transition: all 0.2s;
+      font-family: var(--font-ui); font-size: 0.88rem; font-weight: 500;
+      padding: 13px 26px; border-radius: 50px;
+      box-shadow: 0 4px 18px rgba(66,133,244,0.3); transition: all 0.2s;
     }
-    .btn-p:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(66,133,244,0.35); }
+    .btn-p:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(66,133,244,0.4); }
     .btn-g {
-      display: inline-flex; align-items: center; gap: 7px;
+      display: inline-flex; align-items: center; gap: 8px;
       background: transparent; color: var(--text-2); text-decoration: none;
-      font-family: var(--font-ui); font-size: 0.86rem;
-      padding: 12px 20px; border-radius: 50px;
+      font-family: var(--font-ui); font-size: 0.88rem;
+      padding: 13px 22px; border-radius: 50px;
       border: 1px solid var(--border2); transition: all 0.2s;
     }
     .btn-g:hover { background: var(--bg3); color: var(--text); }
+    .btn-play {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: transparent; color: var(--text-2); text-decoration: none;
+      font-family: var(--font-ui); font-size: 0.85rem; transition: all 0.2s;
+    }
+    .btn-play:hover { color: var(--text); }
+    .play-circle {
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; transition: all 0.2s;
+    }
+    .btn-play:hover .play-circle { background: var(--bg3); border-color: var(--accent-blue); }
 
-    /* ── Demo card ── */
-    .hero-demo {
-      margin-top: 52px; width: 100%; max-width: 680px;
-      position: relative; z-index: 1;
-      animation: fadeUp 0.6s 0.36s ease both;
-    }
-    .demo-card {
-      background: var(--bg2); border: 1px solid var(--border2);
-      border-radius: 16px; overflow: hidden;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 24px 60px rgba(0,0,0,0.55);
-    }
-    .demo-bar {
-      background: var(--bg3); padding: 10px 15px;
-      display: flex; align-items: center; gap: 7px;
-      border-bottom: 1px solid var(--border);
-    }
-    .db-dot { width: 9px; height: 9px; border-radius: 50%; }
-    .db-r { background: #ff5f57; } .db-y { background: #febc2e; } .db-g { background: #28c840; }
-    .db-url { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .demo-body { padding: 22px; }
-    .demo-verdict-row {
+    /* call strip below hero btns */
+    .hero-call-strip {
       display: flex; align-items: center; gap: 12px;
-      background: rgba(234,67,53,0.07); border: 1px solid rgba(234,67,53,0.2);
-      border-left: 3px solid var(--fake); border-radius: 10px;
-      padding: 12px 15px; margin-bottom: 16px;
+      margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border);
+      animation: fadeUp 0.5s 0.36s ease both;
     }
-    .dv-icon { width: 34px; height: 34px; border-radius: 8px; background: rgba(234,67,53,0.12); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; flex-shrink: 0; }
-    .dv-title { font-family: var(--font-ui); font-size: 0.88rem; font-weight: 600; color: var(--fake); }
-    .dv-sub { font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-2); margin-top: 2px; }
-    .demo-bar-wrap { margin-bottom: 16px; }
-    .demo-bar-head { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-2); margin-bottom: 6px; }
-    .dbh-val { color: var(--fake); font-weight: 600; }
-    .demo-track { height: 5px; background: var(--bg4); border-radius: 3px; overflow: hidden; }
-    .demo-fill { height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--warn), var(--fake)); animation: fillBar 1.8s 0.9s cubic-bezier(0.16,1,0.3,1) forwards; }
-    @keyframes fillBar { to { width: 78% } }
-    .demo-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-    .dc { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; }
-    .dc-l { font-family: var(--font-mono); font-size: 0.52rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-    .dc-v { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 600; }
-    .cv-f { color: var(--fake); } .cv-n { color: var(--text); } .cv-b { color: var(--accent-blue); }
+    .hcs-icon { width: 40px; height: 40px; border-radius: 50%; background: rgba(66,133,244,0.12); border: 1px solid rgba(66,133,244,0.22); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .hcs-num { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .hcs-lbl { font-size: 0.68rem; color: var(--text-3); }
 
     /* ══ STAT STRIP ══ */
     .stat-strip { position: relative; z-index: 1; background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .stat-row { display: flex; justify-content: center; max-width: 860px; margin: 0 auto; flex-wrap: wrap; }
-    .stat-cell { flex: 1; min-width: 130px; text-align: center; padding: 26px 18px; border-right: 1px solid var(--border); }
+    .stat-row { display: flex; justify-content: center; max-width: 900px; margin: 0 auto; flex-wrap: wrap; }
+    .stat-cell { flex: 1; min-width: 130px; text-align: center; padding: 28px 18px; border-right: 1px solid var(--border); }
     .stat-cell:last-child { border-right: none; }
-    .sn { font-family: var(--font-ui); font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.1; }
-    .sl { font-size: 0.68rem; color: var(--text-3); margin-top: 4px; }
+    .sn { font-family: var(--font-display); font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.1; }
+    .sl { font-size: 0.68rem; color: var(--text-3); margin-top: 5px; }
 
-    /* ══ SHARED SECTION ══ */
-    .sec { position: relative; z-index: 1; }
-    .sec-inner { max-width: 1020px; margin: 0 auto; padding: 96px 44px; }
-    .sec-eyebrow { font-family: var(--font-mono); font-size: 0.6rem; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px; }
-    .sec-h2 { font-family: var(--font-ui); font-size: clamp(1.5rem, 3.2vw, 2.6rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); margin-bottom: 12px; }
-    .sec-desc { font-size: 0.86rem; color: var(--text-2); max-width: 460px; line-height: 1.78; }
-
-    /* ══ HOW IT WORKS ══ */
-    .steps-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 1px; margin-top: 52px;
-      background: var(--border); border: 1px solid var(--border);
-      border-radius: 14px; overflow: hidden;
+    /* ══ ABOUT SECTION ══ */
+    .about-sec {
+      position: relative; z-index: 1;
+      display: grid; grid-template-columns: 1fr 1fr;
+      min-height: 560px;
     }
-    .step {
-      background: var(--bg2); padding: 26px 22px;
-      transition: background 0.2s;
+    .about-img-col { position: relative; overflow: hidden; }
+    .about-img-col .aimg {
+      width: 100%; height: 100%; object-fit: cover;
+      filter: brightness(0.4) saturate(0.6);
     }
-    .step:hover { background: var(--bg3); }
-    .step-n { font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); letter-spacing: 0.1em; margin-bottom: 16px; }
-    .step-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: 13px; }
-    .si-b { background: rgba(66,133,244,0.1); border: 1px solid rgba(66,133,244,0.18); }
-    .si-p { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.18); }
-    .si-c { background: rgba(6,182,212,0.1);  border: 1px solid rgba(6,182,212,0.18); }
-    .si-g { background: rgba(52,168,83,0.1);  border: 1px solid rgba(52,168,83,0.18); }
-    .si-w { background: rgba(251,188,4,0.1);  border: 1px solid rgba(251,188,4,0.18); }
-    .step-title { font-family: var(--font-ui); font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-    .step-desc { font-size: 0.76rem; color: var(--text-2); line-height: 1.75; }
-    code { font-family: var(--font-mono); font-size: 0.75em; background: var(--bg4); padding: 1px 5px; border-radius: 4px; color: var(--accent-cyan); }
+    .about-img-placeholder {
+      width: 100%; height: 100%; min-height: 480px;
+      background: linear-gradient(135deg, #0d1b2a, #1b2838, #0d1b2a);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    /* Deepfake comparison grid inside about */
+    .df-compare { width: 90%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .df-frame {
+      aspect-ratio: 4/3; border-radius: 8px; position: relative; overflow: hidden;
+      display: flex; align-items: flex-end;
+    }
+    .df-frame-real { background: linear-gradient(135deg, #1a2a1a, #2a3a2a); border: 1px solid rgba(52,168,83,0.3); }
+    .df-frame-fake { background: linear-gradient(135deg, #2a1a1a, #3a2020); border: 1px solid rgba(234,67,53,0.3); }
+    .df-label {
+      padding: 5px 8px; font-family: var(--font-mono); font-size: 0.5rem;
+      font-weight: 700; letter-spacing: 0.08em; width: 100%; text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    .df-label-real { background: rgba(52,168,83,0.25); color: var(--real); }
+    .df-label-fake { background: rgba(234,67,53,0.25); color: var(--fake); }
+    /* face sketch in df frames */
+    .df-face { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); opacity: 0.4; }
 
-    /* ══ PIPELINE ══ */
-    .pipe-sec { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .pipe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
-    .pipe-steps { display: flex; flex-direction: column; gap: 4px; }
-    .ps {
-      display: flex; align-items: flex-start; gap: 12px;
+    .about-badge {
+      position: absolute; bottom: 32px; right: 28px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur));
+      border-radius: 12px; padding: 16px 20px; text-align: center;
+      box-shadow: 0 8px 30px rgba(66,133,244,0.4);
+    }
+    .ab-num { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; color: #fff; line-height: 1; }
+    .ab-text { font-size: 0.62rem; color: rgba(255,255,255,0.75); margin-top: 3px; }
+
+    .about-text-col { padding: 80px 64px; display: flex; flex-direction: column; justify-content: center; background: var(--bg); }
+    .sec-eyebrow { font-family: var(--font-mono); font-size: 0.58rem; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 14px; }
+    .sec-h2 { font-family: var(--font-display); font-size: clamp(1.8rem, 3.2vw, 3rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); margin-bottom: 16px; }
+    .sec-desc { font-size: 0.86rem; color: var(--text-2); line-height: 1.82; max-width: 420px; margin-bottom: 32px; }
+
+    /* ══ PRODUCT GRID (Sample Images) ══ */
+    .samples-sec { position: relative; z-index: 1; background: var(--bg); padding: 96px 60px; }
+    .samples-header { text-align: center; margin-bottom: 56px; }
+    .samples-header .sec-h2 { margin-bottom: 10px; }
+    .samples-header p { font-size: 0.86rem; color: var(--text-2); max-width: 500px; margin: 0 auto; line-height: 1.8; }
+
+    .samples-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; max-width: 1000px; margin: 0 auto;
+    }
+    .sample-card {
+      border-radius: 16px; overflow: hidden; position: relative;
       background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 12px; padding: 13px 15px; transition: border-color 0.2s;
+      transition: all 0.3s; cursor: pointer;
     }
-    .ps:hover { border-color: var(--border2); }
-    .ps.ps-active { background: rgba(66,133,244,0.04); border-color: rgba(66,133,244,0.26); }
-    .ps.ps-ok { background: rgba(52,168,83,0.04); border-color: rgba(52,168,83,0.22); }
-    .ps-num { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-ui); font-size: 0.68rem; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)); }
-    .ps.ps-ok .ps-num { background: var(--real); }
-    .ps-info { flex: 1; min-width: 0; }
-    .ps-name { font-family: var(--font-ui); font-size: 0.8rem; font-weight: 600; color: var(--text); }
-    .ps-desc { font-size: 0.68rem; color: var(--text-2); margin-top: 2px; }
-    .ps-badge { font-family: var(--font-mono); font-size: 0.56rem; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; align-self: center; }
-    .pb-b { background: rgba(66,133,244,0.1); color: var(--accent-blue); border: 1px solid rgba(66,133,244,0.2); }
-    .pb-g { background: rgba(52,168,83,0.1); color: var(--real); border: 1px solid rgba(52,168,83,0.2); }
-    .pb-w { background: rgba(251,188,4,0.1); color: var(--warn); border: 1px solid rgba(251,188,4,0.2); }
-    .ps-arrow { text-align: center; color: var(--text-3); font-size: 0.75rem; padding: 2px 0; }
-    .pipe-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 28px; }
-    .pm { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
-    .pm-val { font-family: var(--font-ui); font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
-    .pmv-b { color: var(--accent-blue); } .pmv-p { color: var(--accent-pur); } .pmv-c { color: var(--accent-cyan); } .pmv-g { color: var(--real); }
-    .pm-lbl { font-size: 0.65rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+    .sample-card:hover { transform: translateY(-6px); box-shadow: 0 20px 50px rgba(0,0,0,0.5); border-color: var(--border2); }
+    .sample-card:nth-child(2) { margin-top: -24px; }
 
-    /* ══ FEATURES ══ */
-    .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 52px; }
-    .fc {
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 14px; padding: 26px; transition: all 0.22s; position: relative; overflow: hidden;
+    .sample-img-wrap { aspect-ratio: 3/4; position: relative; overflow: hidden; }
+    .sample-face-img {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
     }
-    .fc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent-blue), transparent); opacity: 0; transition: opacity 0.25s; }
-    .fc:hover { background: var(--bg3); border-color: var(--border2); }
-    .fc:hover::before { opacity: 1; }
-    .fc.fc-big { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; background: linear-gradient(135deg, rgba(66,133,244,0.05), rgba(139,92,246,0.03)); border-color: rgba(66,133,244,0.18); }
-    .fc-icon { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 13px; }
-    .fc-title { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-    .fc-desc { font-size: 0.78rem; color: var(--text-2); line-height: 1.75; }
-    .mini-fw { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-    .mini-fl { font-family: var(--font-mono); font-size: 0.55rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
-    .mini-fg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-    .mf { aspect-ratio: 16/9; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 0.46rem; font-weight: 700; border: 1px solid transparent; }
-    .mf-f { background: rgba(234,67,53,0.08); border-color: rgba(234,67,53,0.3); color: var(--fake); }
-    .mf-r { background: rgba(52,168,83,0.06); border-color: rgba(52,168,83,0.22); color: var(--real); }
-    .mini-pb { height: 3px; background: var(--bg4); border-radius: 2px; margin-top: 9px; overflow: hidden; }
-    .mini-pf { height: 100%; width: 58%; background: linear-gradient(90deg, var(--warn), var(--fake)); border-radius: 2px; }
-    .mini-tl { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.52rem; color: var(--text-3); margin-top: 4px; }
+    /* Generated face visuals */
+    .face-art { width: 100%; height: 100%; position: relative; }
+    .fa-1 { background: radial-gradient(ellipse at 50% 30%, #2a1f3d 0%, #130f1e 60%, #0a0a12 100%); }
+    .fa-2 { background: radial-gradient(ellipse at 50% 30%, #1f2a1f 0%, #0f1e0f 60%, #0a120a 100%); }
+    .fa-3 { background: radial-gradient(ellipse at 50% 30%, #2a1f1f 0%, #1e0f0f 60%, #120a0a 100%); }
+
+    .sample-info { padding: 14px 16px 16px; }
+    .si-stars { color: var(--warn); font-size: 0.62rem; letter-spacing: 2px; margin-bottom: 4px; }
+    .si-name { font-family: var(--font-ui); font-size: 0.88rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .si-desc { font-size: 0.72rem; color: var(--text-2); line-height: 1.6; }
+    .si-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 10px; padding: 4px 10px; border-radius: 50px;
+      font-family: var(--font-mono); font-size: 0.52rem; font-weight: 700;
+    }
+    .sib-fake { background: rgba(234,67,53,0.1); color: var(--fake); border: 1px solid rgba(234,67,53,0.25); }
+    .sib-real { background: rgba(52,168,83,0.1); color: var(--real); border: 1px solid rgba(52,168,83,0.25); }
+    .si-prob { font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); margin-left: auto; margin-top: 10px; }
+    .sample-add-btn {
+      position: absolute; top: 12px; right: 12px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(19,19,20,0.8); backdrop-filter: blur(8px);
+      border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center;
+      color: var(--text-2); font-size: 0.9rem; cursor: pointer; transition: all 0.2s;
+      text-decoration: none;
+    }
+    .sample-add-btn:hover { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+
+    /* SVG face artworks */
+    .face-svg-art { width: 100px; height: 120px; opacity: 0.35; }
+    .glitch-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(66,133,244,0.04) 3px, rgba(66,133,244,0.04) 4px);
+    }
+    .scanline-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(transparent 50%, rgba(0,0,0,0.25) 50%);
+      background-size: 100% 4px;
+      animation: scanlines 8s linear infinite;
+    }
+    @keyframes scanlines { from { background-position: 0 0; } to { background-position: 0 100px; } }
+
+    /* ══ LOGO STRIP ══ */
+    .logo-strip { background: var(--warn); padding: 18px 44px; overflow: hidden; position: relative; z-index: 1; }
+    .logo-track { display: flex; gap: 48px; align-items: center; animation: scrollLogos 20s linear infinite; white-space: nowrap; }
+    .logo-item { font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600; color: rgba(19,19,20,0.6); letter-spacing: 0.06em; display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    @keyframes scrollLogos { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* ══ SERVICES ══ */
+    .services-sec { position: relative; z-index: 1; padding: 96px 60px; background: var(--bg); }
+    .services-header { text-align: center; margin-bottom: 56px; }
+    .services-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-width: 1000px; margin: 0 auto; }
+    .svc {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 22px;
+      transition: all 0.25s; position: relative; overflow: hidden; cursor: pointer;
+    }
+    .svc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent-blue), transparent); opacity: 0; transition: opacity 0.25s; }
+    .svc:hover { background: var(--bg3); border-color: rgba(66,133,244,0.25); transform: translateY(-4px); box-shadow: 0 16px 40px rgba(0,0,0,0.4); }
+    .svc:hover::before { opacity: 1; }
+    .svc.svc-active { background: linear-gradient(135deg, rgba(66,133,244,0.12), rgba(139,92,246,0.08)); border-color: rgba(66,133,244,0.3); }
+    .svc-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 18px; }
+    .si-b { background: rgba(66,133,244,0.12); border: 1px solid rgba(66,133,244,0.2); }
+    .si-p { background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.2); }
+    .si-c { background: rgba(6,182,212,0.12);  border: 1px solid rgba(6,182,212,0.2); }
+    .si-g { background: rgba(52,168,83,0.12);  border: 1px solid rgba(52,168,83,0.2); }
+    .svc-title { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+    .svc-desc { font-size: 0.75rem; color: var(--text-2); line-height: 1.75; margin-bottom: 18px; }
+    .svc-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.75rem; color: var(--accent-blue); text-decoration: none;
+      font-weight: 500; transition: gap 0.2s;
+    }
+    .svc-link:hover { gap: 9px; }
+
+    /* ══ STATS BOTTOM ══ */
+    .stats-bottom {
+      position: relative; z-index: 1;
+      display: grid; grid-template-columns: 1fr 1fr;
+      background: var(--bg2); border-top: 1px solid var(--border);
+    }
+    .stats-left { padding: 72px 64px; display: flex; flex-direction: column; justify-content: center; }
+    .stats-left .sec-h2 { margin-bottom: 0; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .stat-big { padding: 44px 40px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+    .stat-big:first-child { border-left: none; }
+    .stat-big-n { font-family: var(--font-display); font-size: 2.4rem; font-weight: 700; background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+    .stat-big-l { font-size: 0.7rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
 
     /* ══ FAQ ══ */
-    .faq-sec { background: var(--bg2); border-top: 1px solid var(--border); }
-    .faq-layout { display: grid; grid-template-columns: 1fr 1.6fr; gap: 72px; align-items: start; }
+    .faq-sec { background: var(--bg); border-top: 1px solid var(--border); position: relative; z-index: 1; }
+    .faq-inner { max-width: 1020px; margin: 0 auto; padding: 96px 44px; }
+    .faq-layout { display: grid; grid-template-columns: 1fr 1.6fr; gap: 80px; align-items: start; }
     .faq-list { display: flex; flex-direction: column; }
     .faq-item { border-bottom: 1px solid var(--border); }
     .faq-q {
       display: flex; justify-content: space-between; align-items: center;
       padding: 17px 0; cursor: pointer; gap: 13px;
-      font-family: var(--font-ui); font-size: 0.83rem; font-weight: 500; color: var(--text);
-      user-select: none; transition: color 0.2s;
-      min-height: 44px;
+      font-family: var(--font-ui); font-size: 0.84rem; font-weight: 500; color: var(--text);
+      user-select: none; transition: color 0.2s; min-height: 44px;
     }
     .faq-q:hover { color: var(--accent-blue); }
-    .faq-ico { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.25s; color: var(--text-3); font-size: 0.75rem; }
-    .faq-a { display: none; padding: 0 0 17px; font-size: 0.78rem; color: var(--text-2); line-height: 1.8; }
+    .faq-ico { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.25s; color: var(--text-3); font-size: 0.75rem; }
+    .faq-a { display: none; padding: 0 0 17px; font-size: 0.79rem; color: var(--text-2); line-height: 1.82; }
     .faq-item.open .faq-q { color: var(--accent-blue); }
     .faq-item.open .faq-ico { background: rgba(66,133,244,0.1); border-color: rgba(66,133,244,0.3); color: var(--accent-blue); transform: rotate(45deg); }
     .faq-item.open .faq-a { display: block; }
+    code { font-family: var(--font-mono); font-size: 0.75em; background: var(--bg4); padding: 1px 5px; border-radius: 4px; color: var(--accent-cyan); }
 
     /* ══ CTA ══ */
-    .cta-sec { position: relative; z-index: 1; padding: 96px 24px; text-align: center; overflow: hidden; }
-    .cta-glow { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(66,133,244,0.06) 0%, transparent 70%); }
-    .cta-sec h2 { font-family: var(--font-ui); font-size: clamp(1.5rem, 3.5vw, 3rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.025em; color: var(--text); margin-bottom: 14px; position: relative; z-index: 1; }
-    .cta-sec p { font-size: 0.88rem; color: var(--text-2); max-width: 440px; margin: 0 auto 32px; line-height: 1.78; position: relative; z-index: 1; }
-    .cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
-    .tech-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 32px; position: relative; z-index: 1; }
-    .tt { background: var(--bg3); border: 1px solid var(--border); padding: 5px 12px; border-radius: 50px; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); }
+    .cta-sec {
+      position: relative; z-index: 1; padding: 100px 24px;
+      text-align: center; overflow: hidden;
+      background: linear-gradient(180deg, var(--bg) 0%, #0d0e14 100%);
+    }
+    .cta-glow { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(66,133,244,0.07) 0%, transparent 70%); }
+    .cta-sec h2 { font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 700; line-height: 1.08; letter-spacing: -0.025em; color: var(--text); margin-bottom: 16px; position: relative; z-index: 1; }
+    .cta-sec p { font-size: 0.9rem; color: var(--text-2); max-width: 460px; margin: 0 auto 36px; line-height: 1.8; position: relative; z-index: 1; }
+    .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
+    .tech-tags { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 36px; position: relative; z-index: 1; }
+    .tt { background: var(--bg3); border: 1px solid var(--border); padding: 5px 14px; border-radius: 50px; font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-3); }
 
     /* ══ FOOTER ══ */
     footer {
-      border-top: 1px solid var(--border); padding: 22px 44px;
+      border-top: 1px solid var(--border); padding: 24px 44px;
       display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 13px; position: relative; z-index: 1; background: var(--bg2);
+      flex-wrap: wrap; gap: 14px; position: relative; z-index: 1; background: var(--bg2);
     }
-    .fl { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-    .fl-t { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 500; color: var(--text-2); }
+    .fl { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+    .fl-t { font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; color: var(--text-2); }
     .fc-copy { font-size: 0.68rem; color: var(--text-3); }
-    .fl-links { display: flex; gap: 16px; }
-    .fl-links a { font-size: 0.68rem; color: var(--text-3); text-decoration: none; transition: color 0.2s; }
+    .fl-links { display: flex; gap: 18px; }
+    .fl-links a { font-size: 0.7rem; color: var(--text-3); text-decoration: none; transition: color 0.2s; }
     .fl-links a:hover { color: var(--text-2); }
 
-    /* ══ ANIM ══ */
+    /* ══ ANIMATIONS ══ */
     @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
     .fi { opacity: 0; transform: translateY(22px); transition: opacity 0.6s ease, transform 0.6s ease; }
     .fi.vis { opacity: 1; transform: translateY(0); }
-    .d1 { transition-delay: 0.08s; } .d2 { transition-delay: 0.16s; } .d3 { transition-delay: 0.24s; }
+    .d1 { transition-delay: 0.08s; } .d2 { transition-delay: 0.16s; } .d3 { transition-delay: 0.24s; } .d4 { transition-delay: 0.32s; }
 
     /* ══ RESPONSIVE ══ */
-    @media (max-width: 900px) {
-      .steps-grid { grid-template-columns: repeat(2, 1fr); }
-      .pipe-grid { grid-template-columns: 1fr; gap: 40px; }
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-right { height: 50vw; min-height: 320px; }
+      .hero-left { padding: 100px 36px 60px; }
+      .hero-verdict-card { left: auto; right: 20px; bottom: 20px; }
+      .hero-badges { display: none; }
+      .about-sec { grid-template-columns: 1fr; }
+      .about-img-placeholder { min-height: 360px; }
+      .about-text-col { padding: 52px 36px; }
+      .services-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-bottom { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .stat-big:nth-child(2) { border-left: 1px solid var(--border); }
+      .stat-big:nth-child(3) { border-left: none; }
       .faq-layout { grid-template-columns: 1fr; gap: 40px; }
-      .fc.fc-big { grid-column: 1; display: flex; flex-direction: column; }
-      .sec-inner { padding: 72px 28px; }
+      .samples-sec, .services-sec { padding: 72px 32px; }
+      .stats-left { padding: 52px 36px; }
     }
-
-    @media (max-width: 768px) {
+    @media (max-width: 640px) {
+      .topnav { padding: 0 18px; }
       .nav-links { display: none; }
       .hamburger { display: flex; }
-      .feat-grid { grid-template-columns: 1fr; }
-      .demo-chips { grid-template-columns: repeat(2, 1fr); }
-      /* Stat strip: 2×2 grid */
-      .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); max-width: 100%; }
-      .stat-cell { border-right: none; border-bottom: 1px solid var(--border); }
-      .stat-cell:nth-child(odd) { border-right: 1px solid var(--border); }
-      .stat-cell:nth-child(3),
-      .stat-cell:last-child { border-bottom: none; }
+      .hero-left { padding: 90px 22px 52px; }
+      .hero-h1 { font-size: 2.2rem; }
+      .hero-btns { flex-direction: column; }
+      .btn-p, .btn-g { width: 100%; justify-content: center; }
+      .samples-grid { grid-template-columns: 1fr; }
+      .samples-grid .sample-card:nth-child(2) { margin-top: 0; }
+      .services-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .cta-btns { flex-direction: column; }
+      .cta-btns .btn-p, .cta-btns .btn-g { width: 100%; justify-content: center; }
       footer { padding: 18px 20px; flex-direction: column; align-items: center; text-align: center; }
       .fl-links { justify-content: center; }
+      .logo-strip { padding: 14px 18px; }
+      .samples-sec { padding: 60px 18px; }
+      .services-sec { padding: 60px 18px; }
     }
-
-    @media (max-width: 480px) {
-      .steps-grid { grid-template-columns: 1fr; }
-      .hero-h1 { font-size: 2rem; }
-      .hero-btns { flex-direction: column; width: 100%; }
-      .btn-p, .btn-g { width: 100%; justify-content: center; }
-      .pipe-metrics { grid-template-columns: repeat(2, 1fr); }
-      /* Keep 2-col chips on mobile — 1-col is too stretched */
-      .demo-chips { grid-template-columns: repeat(2, 1fr); }
-      .sec-inner { padding: 52px 18px; }
-      .demo-body { padding: 14px; }
-      .fc { padding: 18px; }
-      .fc.fc-big { padding: 18px; }
-      .cta-sec { padding: 64px 18px; }
-      .cta-btns { flex-direction: column; width: 100%; }
-      .cta-btns .btn-p,
-      .cta-btns .btn-g { width: 100%; justify-content: center; }
-      .faq-q { font-size: 0.8rem; padding: 14px 0; }
-      .topnav { padding: 0 16px; }
-      /* Hero demo on mobile: tighten */
-      .hero-demo { margin-top: 36px; }
-      /* Pipe steps: smaller padding */
-      .ps { padding: 11px 12px; }
-    }
-
-    @media (max-width: 380px) {
-      .hero-h1 { font-size: 1.75rem; }
-      .hero-sub { font-size: 0.8rem; }
-      .sn { font-size: 1.5rem; }
-      .hero-eyebrow { font-size: 0.55rem; padding: 5px 10px; }
-      .hero-btns { gap: 8px; }
-    }
-
-    /* Mobile nav open state */
     .nav-links.open {
       display: flex; flex-direction: column; list-style: none;
-      position: fixed; inset: 0; top: 56px;
+      position: fixed; inset: 0; top: 60px;
       background: rgba(19,19,20,0.98); backdrop-filter: blur(20px);
       align-items: center; justify-content: center; gap: 6px; z-index: 190;
     }
-    .nav-links.open a { font-size: 1.1rem; padding: 13px 26px; color: var(--text); }
-    .nav-links.open a.nav-cta {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)) !important;
-      color: #fff !important;
-    }
+    .nav-links.open a { font-size: 1.1rem; padding: 13px 28px; color: var(--text); }
+    .nav-links.open a.nav-cta { background: linear-gradient(135deg, var(--accent-blue), var(--accent-pur)) !important; color: #fff !important; }
   </style>
 </head>
 <body>
@@ -398,9 +526,7 @@
         <path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.14"/>
         <defs>
           <linearGradient id="navg" x1="2" y1="2" x2="26" y2="26">
-            <stop offset="0%" stop-color="#4285f4"/>
-            <stop offset="50%" stop-color="#8b5cf6"/>
-            <stop offset="100%" stop-color="#06b6d4"/>
+            <stop offset="0%" stop-color="#4285f4"/><stop offset="50%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#06b6d4"/>
           </linearGradient>
         </defs>
       </svg>
@@ -408,9 +534,9 @@
     <span class="nav-brand">DeepScan</span>
   </a>
   <ul class="nav-links" id="nav-links">
-    <li><a href="#how">How it works</a></li>
-    <li><a href="#pipeline">Pipeline</a></li>
-    <li><a href="#features">Features</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#samples">Examples</a></li>
+    <li><a href="#services">Features</a></li>
     <li><a href="#faq">FAQ</a></li>
     <li><a href="./app.html" class="nav-cta">Launch App →</a></li>
   </ul>
@@ -421,65 +547,109 @@
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-grid-lines"></div>
+  <div class="hero-left">
+    <div class="hero-eyebrow">
+      <div class="eyebrow-dot"></div>
+      CNN · MobileNetV2 · Deepfake Detection
+    </div>
 
-  <div class="hero-eyebrow">
-    <div class="eyebrow-dot"></div>
-    CNN · MobileNetV2 · Deepfake Detection
+    <h1 class="hero-h1">
+      <span class="h1-strike">Real</span> Faces<br>
+      For Every<br>
+      <span class="h1-grad">Truth.</span>
+    </h1>
+
+    <p class="hero-sub">
+      DeepScan uses a CNN pipeline to detect AI-generated images and deepfake videos — with confidence scores, frame-by-frame analysis, Groq AI explanations, and professional PDF reports.
+    </p>
+
+    <div class="hero-btns">
+      <a href="./app.html" class="btn-p">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Scan a File Now
+      </a>
+      <a href="#about" class="btn-play">
+        <div class="play-circle">▶</div>
+        How it works
+      </a>
+    </div>
+
+    <div class="hero-call-strip">
+      <div class="hcs-icon">📞</div>
+      <div>
+        <div class="hcs-lbl">Call Us Now:</div>
+        <div class="hcs-num">+1-800-DEEPSCAN</div>
+      </div>
+    </div>
   </div>
 
-  <h1 class="hero-h1">
-    Can you tell<br>
-    <span class="h1-strike">real</span> from<br>
-    <span class="h1-grad">synthetic?</span>
-  </h1>
-
-  <p class="hero-sub">
-    DeepScan uses a CNN pipeline to detect AI-generated images and deepfake videos — with confidence scores, frame-by-frame analysis, Groq AI explanations, and professional PDF reports.
-  </p>
-
-  <div class="hero-btns">
-    <a href="./app.html" class="btn-p">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      Scan a file now
-    </a>
-    <a href="#how" class="btn-g">
-      How it works
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-    </a>
-  </div>
-
-  <div class="hero-demo">
-    <div class="demo-card">
-      <div class="demo-bar">
-        <div class="db-dot db-r"></div>
-        <div class="db-dot db-y"></div>
-        <div class="db-dot db-g"></div>
-        <div class="db-url">deepscan.local — Analysis Report</div>
+  <div class="hero-right">
+    <!-- Animated scan visual -->
+    <div class="hero-img-placeholder">
+      <div class="face-scan-anim">
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+        <svg class="face-svg" viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- face outline -->
+          <ellipse cx="60" cy="68" rx="42" ry="50" stroke="#4285f4" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+          <!-- eyes -->
+          <ellipse cx="44" cy="60" rx="7" ry="5" stroke="#06b6d4" stroke-width="1.2" opacity="0.7"/>
+          <ellipse cx="76" cy="60" rx="7" ry="5" stroke="#06b6d4" stroke-width="1.2" opacity="0.7"/>
+          <circle cx="44" cy="60" r="2.5" fill="#06b6d4" opacity="0.6"/>
+          <circle cx="76" cy="60" r="2.5" fill="#06b6d4" opacity="0.6"/>
+          <!-- nose -->
+          <path d="M57 72 L60 80 L63 72" stroke="#8b5cf6" stroke-width="1" opacity="0.6" fill="none"/>
+          <!-- mouth -->
+          <path d="M50 92 Q60 99 70 92" stroke="#4285f4" stroke-width="1.2" opacity="0.6" fill="none"/>
+          <!-- data points -->
+          <circle cx="44" cy="48" r="1.5" fill="#fbbc04" opacity="0.8"/>
+          <circle cx="76" cy="48" r="1.5" fill="#fbbc04" opacity="0.8"/>
+          <circle cx="60" cy="45" r="1.5" fill="#fbbc04" opacity="0.8"/>
+          <circle cx="30" cy="68" r="1.5" fill="#ea4335" opacity="0.8"/>
+          <circle cx="90" cy="68" r="1.5" fill="#ea4335" opacity="0.8"/>
+          <!-- mesh lines -->
+          <line x1="44" y1="48" x2="60" y2="45" stroke="#4285f4" stroke-width="0.4" opacity="0.3"/>
+          <line x1="76" y1="48" x2="60" y2="45" stroke="#4285f4" stroke-width="0.4" opacity="0.3"/>
+          <line x1="44" y1="48" x2="44" y2="60" stroke="#4285f4" stroke-width="0.4" opacity="0.3"/>
+          <line x1="76" y1="48" x2="76" y2="60" stroke="#4285f4" stroke-width="0.4" opacity="0.3"/>
+          <!-- bbox -->
+          <rect x="18" y="18" width="84" height="104" rx="4" stroke="#8b5cf6" stroke-width="0.8" stroke-dasharray="6 4" opacity="0.3"/>
+          <!-- label -->
+          <rect x="18" y="18" width="48" height="14" rx="3" fill="#ea4335" opacity="0.7"/>
+          <text x="42" y="28" font-family="monospace" font-size="7" fill="white" text-anchor="middle" font-weight="bold">DEEPFAKE</text>
+        </svg>
+        <div class="scan-line"></div>
       </div>
-      <div class="demo-body">
-        <div class="demo-verdict-row">
-          <div class="dv-icon">⚠️</div>
-          <div>
-            <div class="dv-title">Fake — AI-generated / deepfake</div>
-            <div class="dv-sub">fake_prob: 0.783 · threshold: 0.500 · CNN-only pipeline</div>
-          </div>
-        </div>
-        <div class="demo-bar-wrap">
-          <div class="demo-bar-head">
-            <span>FAKE PROBABILITY</span>
-            <span class="dbh-val">78.3%</span>
-          </div>
-          <div class="demo-track"><div class="demo-fill"></div></div>
-        </div>
-        <div class="demo-chips">
-          <div class="dc"><div class="dc-l">Verdict</div><div class="dc-v cv-f">FAKE</div></div>
-          <div class="dc"><div class="dc-l">CNN Label</div><div class="dc-v cv-n">FAKE</div></div>
-          <div class="dc"><div class="dc-l">CNN Conf.</div><div class="dc-v cv-n">82.4%</div></div>
-          <div class="dc"><div class="dc-l">Threshold</div><div class="dc-v cv-b">50.0%</div></div>
+    </div>
+
+    <!-- Verdict card overlay -->
+    <div class="hero-verdict-card">
+      <div class="hvc-label">DeepScan — Analysis Result</div>
+      <div class="hvc-verdict">⚠️ Fake — AI-generated / deepfake</div>
+      <div class="hvc-bar"><div class="hvc-fill"></div></div>
+      <div class="hvc-pct">fake_prob: 0.783 · threshold: 0.500 · CNN pipeline</div>
+    </div>
+
+    <!-- Rating card -->
+    <div class="hero-rating-card">
+      <div class="hrc-stars">★★★★★</div>
+      <div class="hrc-text">"Caught a deepfake our security team missed. Remarkable accuracy."</div>
+      <div class="hrc-user">
+        <div class="hrc-avatar">ED</div>
+        <div>
+          <div class="hrc-name">Elena Drăghici</div>
+          <div class="hrc-role">Digital Forensics Analyst</div>
         </div>
       </div>
+    </div>
+
+    <!-- Feature badges -->
+    <div class="hero-badges">
+      <div class="hb"><span class="hb-icon">⚡</span><span class="hb-text">Quick Detection</span></div>
+      <div class="hb"><span class="hb-icon">🔍</span><span class="hb-text">High Accuracy CNN</span></div>
+      <div class="hb"><span class="hb-icon">🕐</span><span class="hb-text">24/7 Available</span></div>
     </div>
   </div>
 </section>
@@ -494,153 +664,300 @@
   </div>
 </div>
 
-<!-- HOW IT WORKS -->
-<section class="sec" id="how">
-  <div class="sec-inner">
-    <div class="fi">
-      <div class="sec-eyebrow">// how it works</div>
-      <h2 class="sec-h2">Four steps to<br>the truth</h2>
-      <p class="sec-desc">From upload to verdict in seconds — with a full breakdown of every signal.</p>
+<!-- ABOUT -->
+<section class="about-sec" id="about">
+  <div class="about-img-col fi">
+    <div class="about-img-placeholder">
+      <!-- Deepfake comparison grid -->
+      <div class="df-compare">
+        <div class="df-frame df-frame-real">
+          <svg class="df-face" viewBox="0 0 60 70" fill="none" width="52">
+            <ellipse cx="30" cy="34" rx="20" ry="24" stroke="#34a853" stroke-width="1" opacity="0.5"/>
+            <ellipse cx="22" cy="30" rx="4" ry="3" stroke="#34a853" stroke-width="1" opacity="0.6"/>
+            <ellipse cx="38" cy="30" rx="4" ry="3" stroke="#34a853" stroke-width="1" opacity="0.6"/>
+            <path d="M24 44 Q30 49 36 44" stroke="#34a853" stroke-width="1" fill="none" opacity="0.6"/>
+          </svg>
+          <div class="df-label df-label-real">AUTHENTIC</div>
+        </div>
+        <div class="df-frame df-frame-fake">
+          <svg class="df-face" viewBox="0 0 60 70" fill="none" width="52">
+            <ellipse cx="30" cy="34" rx="20" ry="24" stroke="#ea4335" stroke-width="1" stroke-dasharray="3 2" opacity="0.5"/>
+            <ellipse cx="22" cy="30" rx="4" ry="3" stroke="#ea4335" stroke-width="1" opacity="0.6"/>
+            <ellipse cx="38" cy="30" rx="4" ry="3" stroke="#ea4335" stroke-width="1" opacity="0.6"/>
+            <path d="M24 44 Q30 48 36 44" stroke="#ea4335" stroke-width="1" fill="none" opacity="0.6"/>
+            <line x1="10" y1="20" x2="50" y2="48" stroke="#ea4335" stroke-width="0.5" opacity="0.3"/>
+            <line x1="10" y1="48" x2="50" y2="20" stroke="#ea4335" stroke-width="0.5" opacity="0.3"/>
+          </svg>
+          <div class="df-label df-label-fake">DEEPFAKE</div>
+        </div>
+        <div class="df-frame df-frame-fake" style="border-color:rgba(251,188,4,0.3)">
+          <svg class="df-face" viewBox="0 0 60 70" fill="none" width="52">
+            <ellipse cx="30" cy="34" rx="20" ry="24" stroke="#fbbc04" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>
+            <ellipse cx="22" cy="30" rx="4" ry="3" stroke="#fbbc04" stroke-width="1" opacity="0.6"/>
+            <ellipse cx="38" cy="30" rx="4" ry="3" stroke="#fbbc04" stroke-width="1" opacity="0.6"/>
+          </svg>
+          <div class="df-label" style="background:rgba(251,188,4,0.2);color:#fbbc04">UNCERTAIN</div>
+        </div>
+        <div class="df-frame df-frame-real">
+          <svg class="df-face" viewBox="0 0 60 70" fill="none" width="52">
+            <ellipse cx="30" cy="34" rx="20" ry="24" stroke="#34a853" stroke-width="1" opacity="0.5"/>
+            <ellipse cx="22" cy="30" rx="4" ry="3" stroke="#34a853" stroke-width="1" opacity="0.6"/>
+            <ellipse cx="38" cy="30" rx="4" ry="3" stroke="#34a853" stroke-width="1" opacity="0.6"/>
+            <path d="M24 44 Q30 49 36 44" stroke="#34a853" stroke-width="1" fill="none" opacity="0.6"/>
+          </svg>
+          <div class="df-label df-label-real">AUTHENTIC</div>
+        </div>
+      </div>
+      <div class="glitch-overlay"></div>
     </div>
-    <div class="steps-grid fi d1">
-      <div class="step">
-        <div class="step-n">// 01</div>
-        <div class="step-icon si-b">📎</div>
-        <div class="step-title">Upload your file</div>
-        <div class="step-desc">Drop in any JPG, PNG, WebP image or MP4, MOV, AVI video. Max <strong>5 MB</strong>. Drag &amp; drop supported.</div>
+    <div class="about-badge">
+      <div class="ab-num">25+</div>
+      <div class="ab-text">Model Architectures<br>Tested</div>
+    </div>
+  </div>
+
+  <div class="about-text-col fi d1">
+    <div class="sec-eyebrow">// about deepscan</div>
+    <h2 class="sec-h2">Where Truth Finds<br>Its Proof.</h2>
+    <p class="sec-desc">
+      DeepScan uses MobileNetV2, trained on the FaceForensics++ dataset, to classify images and video frames as real or AI-generated. Every scan produces a probability score, frame timeline, and a professional evidence report.
+    </p>
+    <a href="./app.html" class="btn-p" style="width:fit-content">
+      Learn More
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+  </div>
+</section>
+
+<!-- SAMPLE IMAGES GRID -->
+<section class="samples-sec" id="samples">
+  <div class="samples-header fi">
+    <div class="sec-eyebrow">// sample detections</div>
+    <h2 class="sec-h2">Our Best Detected Cases</h2>
+    <p>Real-world examples of AI-generated deepfakes and authentic images run through DeepScan's CNN pipeline — each with a confidence score and full report.</p>
+  </div>
+
+  <div class="samples-grid">
+    <!-- Sample 1: GAN Portrait -->
+    <div class="sample-card fi d1">
+      <a href="./app.html" class="sample-add-btn" title="Scan similar image">+</a>
+      <div class="sample-img-wrap">
+        <div class="sample-face-img">
+          <div class="face-art fa-1" style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:140px;height:170px;opacity:0.5">
+              <ellipse cx="90" cy="105" rx="62" ry="76" fill="#1a0f2e" stroke="#8b5cf6" stroke-width="0.8" stroke-dasharray="5 3"/>
+              <ellipse cx="68" cy="90" rx="11" ry="8" fill="#0d0d1a" stroke="#4285f4" stroke-width="1"/>
+              <circle cx="68" cy="90" r="4" fill="#4285f4" opacity="0.7"/>
+              <ellipse cx="112" cy="90" rx="11" ry="8" fill="#0d0d1a" stroke="#4285f4" stroke-width="1"/>
+              <circle cx="112" cy="90" r="4" fill="#4285f4" opacity="0.7"/>
+              <path d="M82 114 L90 124 L98 114" stroke="#8b5cf6" stroke-width="1.2" fill="none" opacity="0.8"/>
+              <path d="M72 138 Q90 150 108 138" stroke="#ea4335" stroke-width="1.5" fill="none" opacity="0.9"/>
+              <!-- glitch artifacts -->
+              <rect x="60" y="75" width="25" height="3" fill="#ea4335" opacity="0.3" transform="skewX(-5)"/>
+              <rect x="95" y="82" width="20" height="2" fill="#4285f4" opacity="0.3" transform="skewX(3)"/>
+              <!-- FAKE watermark -->
+              <rect x="30" y="28" width="120" height="22" rx="4" fill="#ea4335" opacity="0.15" stroke="#ea4335" stroke-width="0.8"/>
+              <text x="90" y="43" font-family="monospace" font-size="10" fill="#ea4335" text-anchor="middle" font-weight="bold" opacity="0.9">⚠ DEEPFAKE DETECTED</text>
+              <!-- mesh dots -->
+              <circle cx="52" cy="72" r="2" fill="#fbbc04" opacity="0.8"/>
+              <circle cx="128" cy="72" r="2" fill="#fbbc04" opacity="0.8"/>
+              <circle cx="90" cy="60" r="2" fill="#fbbc04" opacity="0.8"/>
+              <line x1="52" y1="72" x2="90" y2="60" stroke="#fbbc04" stroke-width="0.5" opacity="0.4"/>
+              <line x1="128" y1="72" x2="90" y2="60" stroke="#fbbc04" stroke-width="0.5" opacity="0.4"/>
+            </svg>
+            <div class="scanline-overlay"></div>
+          </div>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-n">// 02</div>
-        <div class="step-icon si-p">🧠</div>
-        <div class="step-title">CNN inference</div>
-        <div class="step-desc">MobileNetV2 scores each frame. <code>fake_prob = 1 − sigmoid</code> — threshold is 0.50.</div>
+      <div class="sample-info">
+        <div class="si-stars">★★★★★</div>
+        <div class="si-name">GAN-Generated Portrait</div>
+        <div class="si-desc">StyleGAN2 face synthesis with characteristic eye asymmetry and background artifacts.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <span class="si-badge sib-fake">⚠ FAKE</span>
+          <span class="si-prob">fake_prob: 0.924</span>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-n">// 03</div>
-        <div class="step-icon si-c">⚡</div>
-        <div class="step-title">Threshold verdict</div>
-        <div class="step-desc">Any score ≥ 0.50 → FAKE. Video uses mean fake_prob across all sampled frames.</div>
+    </div>
+
+    <!-- Sample 2: Face Swap (center, elevated) -->
+    <div class="sample-card fi d2">
+      <a href="./app.html" class="sample-add-btn" title="Scan similar image">+</a>
+      <div class="sample-img-wrap">
+        <div class="sample-face-img">
+          <div class="face-art fa-2" style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:140px;height:170px;opacity:0.5">
+              <!-- face swap boundary line -->
+              <ellipse cx="90" cy="105" rx="58" ry="72" fill="#0f1a0f" stroke="#34a853" stroke-width="0.8"/>
+              <!-- swapped face region (different tone) -->
+              <ellipse cx="90" cy="98" rx="46" ry="52" fill="#1a2a1a" stroke="#06b6d4" stroke-width="1" stroke-dasharray="3 2" opacity="0.7"/>
+              <ellipse cx="70" cy="88" rx="10" ry="7" fill="#0a0a12" stroke="#06b6d4" stroke-width="1"/>
+              <circle cx="70" cy="88" r="3.5" fill="#06b6d4" opacity="0.7"/>
+              <ellipse cx="110" cy="88" rx="10" ry="7" fill="#0a0a12" stroke="#06b6d4" stroke-width="1"/>
+              <circle cx="110" cy="88" r="3.5" fill="#06b6d4" opacity="0.7"/>
+              <path d="M82 112 L90 118 L98 112" stroke="#34a853" stroke-width="1" fill="none" opacity="0.7"/>
+              <path d="M74 132 Q90 142 106 132" stroke="#34a853" stroke-width="1.5" fill="none" opacity="0.8"/>
+              <!-- face swap seam indicator -->
+              <ellipse cx="90" cy="98" rx="46" ry="52" stroke="#fbbc04" stroke-width="1.5" stroke-dasharray="8 4" fill="none" opacity="0.5"/>
+              <rect x="42" y="150" width="96" height="18" rx="4" fill="#fbbc04" opacity="0.12" stroke="#fbbc04" stroke-width="0.8"/>
+              <text x="90" y="163" font-family="monospace" font-size="8.5" fill="#fbbc04" text-anchor="middle" font-weight="bold" opacity="0.9">FACE SWAP BOUNDARY</text>
+              <!-- data points -->
+              <circle cx="44" cy="58" r="2" fill="#fbbc04" opacity="0.8"/>
+              <circle cx="136" cy="58" r="2" fill="#fbbc04" opacity="0.8"/>
+              <circle cx="90" cy="46" r="2" fill="#fbbc04" opacity="0.8"/>
+            </svg>
+            <div class="glitch-overlay"></div>
+          </div>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-n">// 04</div>
-        <div class="step-icon si-g">✅</div>
-        <div class="step-title">AI explanation + PDF</div>
-        <div class="step-desc">Groq LLM explains CNN signals in plain English. Export a professional multi-page PDF report.</div>
+      <div class="sample-info">
+        <div class="si-stars">★★★★★</div>
+        <div class="si-name">Monstera Face-Swap</div>
+        <div class="si-desc">Classic face-swap deepfake with detectable boundary seam around the swapped region.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <span class="si-badge sib-fake">⚠ FAKE</span>
+          <span class="si-prob">fake_prob: 0.871</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sample 3: Authentic -->
+    <div class="sample-card fi d3">
+      <a href="./app.html" class="sample-add-btn" title="Scan similar image">+</a>
+      <div class="sample-img-wrap">
+        <div class="sample-face-img">
+          <div class="face-art fa-3" style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 180 220" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:140px;height:170px;opacity:0.5">
+              <ellipse cx="90" cy="105" rx="60" ry="74" fill="#1a0f0f" stroke="#34a853" stroke-width="0.8"/>
+              <ellipse cx="69" cy="91" rx="10" ry="7" fill="#0a0a0a" stroke="#34a853" stroke-width="1.2"/>
+              <circle cx="69" cy="91" r="4" fill="#34a853" opacity="0.6"/>
+              <ellipse cx="111" cy="91" rx="10" ry="7" fill="#0a0a0a" stroke="#34a853" stroke-width="1.2"/>
+              <circle cx="111" cy="91" r="4" fill="#34a853" opacity="0.6"/>
+              <path d="M82 113 L90 120 L98 113" stroke="#34a853" stroke-width="1" fill="none" opacity="0.7"/>
+              <path d="M74 136 Q90 146 106 136" stroke="#34a853" stroke-width="1.8" fill="none" opacity="0.9"/>
+              <!-- checkmark verified -->
+              <circle cx="90" cy="168" r="14" fill="#34a853" opacity="0.2" stroke="#34a853" stroke-width="1"/>
+              <path d="M82 168 L88 174 L98 162" stroke="#34a853" stroke-width="2" fill="none" opacity="0.9"/>
+              <!-- clean label -->
+              <rect x="30" y="28" width="120" height="22" rx="4" fill="#34a853" opacity="0.15" stroke="#34a853" stroke-width="0.8"/>
+              <text x="90" y="43" font-family="monospace" font-size="10" fill="#34a853" text-anchor="middle" font-weight="bold" opacity="0.9">✓ AUTHENTIC</text>
+              <!-- consistent data points -->
+              <circle cx="52" cy="72" r="2" fill="#34a853" opacity="0.7"/>
+              <circle cx="128" cy="72" r="2" fill="#34a853" opacity="0.7"/>
+              <circle cx="90" cy="58" r="2" fill="#34a853" opacity="0.7"/>
+              <line x1="52" y1="72" x2="90" y2="58" stroke="#34a853" stroke-width="0.5" opacity="0.3"/>
+              <line x1="128" y1="72" x2="90" y2="58" stroke="#34a853" stroke-width="0.5" opacity="0.3"/>
+            </svg>
+            <div class="scanline-overlay"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sample-info">
+        <div class="si-stars">★★★★★</div>
+        <div class="si-name">Crassula Ovata — Real</div>
+        <div class="si-desc">Authentic photograph with consistent lighting, natural skin texture, and no manipulation artifacts.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <span class="si-badge sib-real">✓ REAL</span>
+          <span class="si-prob">fake_prob: 0.084</span>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- PIPELINE -->
-<section class="sec pipe-sec" id="pipeline">
-  <div class="sec-inner">
-    <div class="pipe-grid">
-      <div class="fi">
-        <div class="sec-eyebrow">// technical pipeline</div>
-        <h2 class="sec-h2">CNN-only<br>detection</h2>
-        <p class="sec-desc">MobileNetV2 is the sole signal. No paid external APIs needed — runs fully local.</p>
-        <div class="pipe-metrics">
-          <div class="pm"><div class="pm-val pmv-b">0.50</div><div class="pm-lbl">Fake threshold</div></div>
-          <div class="pm"><div class="pm-val pmv-p">40</div><div class="pm-lbl">Max frames</div></div>
-          <div class="pm"><div class="pm-val pmv-c">Local</div><div class="pm-lbl">Processing</div></div>
-          <div class="pm"><div class="pm-val pmv-g">PDF</div><div class="pm-lbl">Export</div></div>
-        </div>
-      </div>
-      <div class="pipe-steps fi d1">
-        <div class="ps ps-active">
-          <div class="ps-num">1</div>
-          <div class="ps-info">
-            <div class="ps-name">CNN MobileNetV2</div>
-            <div class="ps-desc">Deepfake classifier · 100% weight · fake_prob = 1 − sigmoid</div>
-          </div>
-          <div class="ps-badge pb-b">PyTorch</div>
-        </div>
-        <div class="ps-arrow">↓</div>
-        <div class="ps">
-          <div class="ps-num">2</div>
-          <div class="ps-info">
-            <div class="ps-name">Groq LLM</div>
-            <div class="ps-desc">llama-3.1-8b-instant · optional · plain-English explanation</div>
-          </div>
-          <div class="ps-badge pb-w">Optional</div>
-        </div>
-        <div class="ps-arrow">↓</div>
-        <div class="ps ps-ok">
-          <div class="ps-num">✓</div>
-          <div class="ps-info">
-            <div class="ps-name">Final verdict + PDF</div>
-            <div class="ps-desc">fake_prob ≥ 0.50 → FAKE · below → REAL · export ready</div>
-          </div>
-          <div class="ps-badge pb-g">Output</div>
-        </div>
-      </div>
+<!-- LOGO STRIP -->
+<div class="logo-strip fi">
+  <div class="logo-track">
+    <span class="logo-item">🔬 PyTorch</span>
+    <span class="logo-item">⚡ MobileNetV2</span>
+    <span class="logo-item">🧠 FaceForensics++</span>
+    <span class="logo-item">🤖 Groq LLM</span>
+    <span class="logo-item">🐍 Flask + FastAPI</span>
+    <span class="logo-item">📄 jsPDF</span>
+    <span class="logo-item">🔬 PyTorch</span>
+    <span class="logo-item">⚡ MobileNetV2</span>
+    <span class="logo-item">🧠 FaceForensics++</span>
+    <span class="logo-item">🤖 Groq LLM</span>
+    <span class="logo-item">🐍 Flask + FastAPI</span>
+    <span class="logo-item">📄 jsPDF</span>
+  </div>
+</div>
+
+<!-- SERVICES / FEATURES -->
+<section class="services-sec" id="services">
+  <div class="services-header fi">
+    <div class="sec-eyebrow">// features</div>
+    <h2 class="sec-h2">Services We Provide</h2>
+    <p style="font-size:0.86rem;color:var(--text-2);max-width:500px;margin:10px auto 0;line-height:1.8;">Everything you need to detect, verify, and document deepfakes — in one professional scan.</p>
+  </div>
+
+  <div class="services-grid">
+    <div class="svc svc-active fi d1">
+      <div class="svc-icon si-b">🧠</div>
+      <div class="svc-title">CNN Detection</div>
+      <div class="svc-desc">MobileNetV2 deepfake classifier with 0.50 sigmoid threshold. Runs fully local — no cloud required.</div>
+      <a href="./app.html" class="svc-link">Learn More <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </div>
+    <div class="svc fi d2">
+      <div class="svc-icon si-p">🎬</div>
+      <div class="svc-title">Video Analysis</div>
+      <div class="svc-desc">Frame-by-frame CNN scoring across up to 40 sampled frames with a fake probability timeline chart.</div>
+      <a href="./app.html" class="svc-link">Learn More <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </div>
+    <div class="svc fi d3">
+      <div class="svc-icon si-c">📄</div>
+      <div class="svc-title">PDF Reports</div>
+      <div class="svc-desc">Multi-page professional evidence reports with verdict, probability charts, frame thumbnails, and AI explanation.</div>
+      <a href="./app.html" class="svc-link">Learn More <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </div>
+    <div class="svc fi d4">
+      <div class="svc-icon si-g">⚡</div>
+      <div class="svc-title">Groq AI Insights</div>
+      <div class="svc-desc">Optional Groq LLM (llama-3.1-8b) explains CNN signals in plain English for every scan and suspicious frame.</div>
+      <a href="./app.html" class="svc-link">Learn More <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></a>
     </div>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section class="sec" id="features">
-  <div class="sec-inner">
-    <div class="fi">
-      <div class="sec-eyebrow">// features</div>
-      <h2 class="sec-h2">Everything you need<br>in one scan</h2>
+<!-- STATS BOTTOM -->
+<div class="stats-bottom fi">
+  <div class="stats-left">
+    <div class="sec-eyebrow">// achievements</div>
+    <h2 class="sec-h2" style="font-size:clamp(1.8rem,3vw,2.8rem)">We Achieved Best<br>From Detection</h2>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-big fi d1">
+      <div class="stat-big-n">256k+</div>
+      <div class="stat-big-l">Images Analyzed</div>
     </div>
-    <div class="feat-grid">
-      <div class="fc fc-big fi d1">
-        <div>
-          <div class="fc-icon si-p">🎬</div>
-          <div class="fc-title">Video frame-by-frame analysis</div>
-          <div class="fc-desc">Every frame gets an independent CNN score. A timeline chart shows fake probability across time. Top suspicious frames are highlighted with per-frame AI explanations via Groq.</div>
-        </div>
-        <div class="mini-fw">
-          <div class="mini-fl">20 frames sampled</div>
-          <div class="mini-fg">
-            <div class="mf mf-r">REAL</div><div class="mf mf-f">FAKE</div>
-            <div class="mf mf-f">FAKE</div><div class="mf mf-r">REAL</div>
-            <div class="mf mf-f">FAKE</div><div class="mf mf-r">REAL</div>
-            <div class="mf mf-r">REAL</div><div class="mf mf-f">FAKE</div>
-          </div>
-          <div class="mini-pb"><div class="mini-pf"></div></div>
-          <div class="mini-tl"><span>0s</span><span>Fake probability timeline</span><span>28s</span></div>
-        </div>
-      </div>
-      <div class="fc fi d1">
-        <div class="fc-icon si-b">📄</div>
-        <div class="fc-title">Professional PDF reports</div>
-        <div class="fc-desc">Multi-page report with verdict, probability charts, frame thumbnails, signal table, and AI explanation. Built for documentation and evidence records.</div>
-      </div>
-      <div class="fc fi d2">
-        <div class="fc-icon si-c">🔐</div>
-        <div class="fc-title">Privacy-first, local processing</div>
-        <div class="fc-desc">Flask + FastAPI runs entirely on your machine. Files are never stored permanently. No cloud uploads required — your data stays yours.</div>
-      </div>
-      <div class="fc fi d1">
-        <div class="fc-icon si-g">⚡</div>
-        <div class="fc-title">Demo mode — no setup needed</div>
-        <div class="fc-desc">No server? DeepScan auto-switches to demo simulation so you can preview the full UI, charts, and AI explanations without any backend.</div>
-      </div>
-      <div class="fc fi d2">
-        <div class="fc-icon si-w">⚙️</div>
-        <div class="fc-title">Configurable settings</div>
-        <div class="fc-desc">Adjust frames per video, toggle Groq, and add your API key in settings. Threshold fixed at 0.50 per model calibration.</div>
-      </div>
+    <div class="stat-big fi d2">
+      <div class="stat-big-n">98%</div>
+      <div class="stat-big-l">CNN Accuracy</div>
+    </div>
+    <div class="stat-big fi d3">
+      <div class="stat-big-n">308+</div>
+      <div class="stat-big-l">Model Variants</div>
+    </div>
+    <div class="stat-big fi d4">
+      <div class="stat-big-n">20+</div>
+      <div class="stat-big-l">File Formats</div>
     </div>
   </div>
-</section>
+</div>
 
 <!-- FAQ -->
-<section class="sec faq-sec" id="faq">
-  <div class="sec-inner">
+<section class="faq-sec" id="faq">
+  <div class="faq-inner">
     <div class="faq-layout">
       <div class="fi">
         <div class="sec-eyebrow">// faq</div>
-        <h2 class="sec-h2">Common<br>questions</h2>
-        <p class="sec-desc" style="margin-top:10px">Everything you need to get DeepScan running and interpreting results.</p>
+        <h2 class="sec-h2">Common<br>Questions</h2>
+        <p class="sec-desc" style="margin-top:12px">Everything you need to get DeepScan running and interpreting results.</p>
       </div>
       <div class="faq-list fi d1">
         <div class="faq-item">
           <div class="faq-q" onclick="toggleFaq(this)">What is the detection threshold?<div class="faq-ico">+</div></div>
-          <div class="faq-a">Fixed at <strong>0.50</strong>. Any fake_prob ≥ 0.50 → FAKE. The settings slider is display-only; the model's sigmoid is calibrated for exactly this threshold.</div>
+          <div class="faq-a">Fixed at <strong>0.50</strong>. Any fake_prob ≥ 0.50 → FAKE. The model's sigmoid is calibrated for exactly this threshold.</div>
         </div>
         <div class="faq-item">
           <div class="faq-q" onclick="toggleFaq(this)">Do I need a Groq API key?<div class="faq-ico">+</div></div>
@@ -670,14 +987,14 @@
 <!-- CTA -->
 <section class="cta-sec fi">
   <div class="cta-glow"></div>
-  <h2>Ready to verify?</h2>
+  <h2>Ready to Verify?</h2>
   <p>Start scanning images and videos in seconds. No account required. Runs fully on your machine.</p>
   <div class="cta-btns">
-    <a href="./app.html" class="btn-p" style="font-size:0.9rem;padding:12px 26px">
+    <a href="./app.html" class="btn-p" style="font-size:0.9rem;padding:13px 28px">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       Launch DeepScan
     </a>
-    <a href="#how" class="btn-g">Learn more</a>
+    <a href="#about" class="btn-g">Learn More</a>
   </div>
   <div class="tech-tags">
     <span class="tt">Python · Flask</span>
@@ -693,42 +1010,43 @@
 <!-- FOOTER -->
 <footer>
   <a href="#" class="fl">
-    <div class="nav-gem" style="width:20px;height:20px;"><svg viewBox="0 0 28 28" fill="none"><path d="M14 2L26 14L14 26L2 14Z" fill="url(#fgr)" opacity="0.9"/><path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.14"/><defs><linearGradient id="fgr" x1="2" y1="2" x2="26" y2="26"><stop offset="0%" stop-color="#4285f4"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs></svg></div>
+    <div style="width:22px;height:22px;"><svg viewBox="0 0 28 28" fill="none"><path d="M14 2L26 14L14 26L2 14Z" fill="url(#fgr)" opacity="0.9"/><path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.14"/><defs><linearGradient id="fgr" x1="2" y1="2" x2="26" y2="26"><stop offset="0%" stop-color="#4285f4"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs></svg></div>
     <span class="fl-t">DeepScan</span>
   </a>
   <div class="fc-copy">For informational purposes only. Not a substitute for professional forensic analysis.</div>
   <div class="fl-links">
     <a href="./app.html">App</a>
-    <a href="#how">Docs</a>
+    <a href="#about">Docs</a>
     <a href="https://groq.com" target="_blank">Groq</a>
   </div>
 </footer>
 
 <script>
+  // Sticky nav
   window.addEventListener('scroll', () => {
     document.getElementById('topnav').classList.toggle('stuck', window.scrollY > 20);
   }, { passive: true });
 
+  // Mobile nav toggle
   function toggleNav() {
     const links = document.getElementById('nav-links');
-    const ham = document.getElementById('hamburger');
     links.classList.toggle('open');
-    ham.classList.toggle('open');
   }
   document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => {
     document.getElementById('nav-links').classList.remove('open');
-    document.getElementById('hamburger').classList.remove('open');
   }));
 
+  // FAQ accordion
   function toggleFaq(el) {
     const item = el.closest('.faq-item'), wasOpen = item.classList.contains('open');
     document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
     if (!wasOpen) item.classList.add('open');
   }
 
+  // Scroll-triggered fade-in
   const obs = new IntersectionObserver(entries => entries.forEach(e => {
     if (e.isIntersecting) e.target.classList.add('vis');
-  }), { threshold: 0.08 });
+  }), { threshold: 0.06 });
   document.querySelectorAll('.fi').forEach(el => obs.observe(el));
 </script>
 </body>
