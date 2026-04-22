@@ -31,7 +31,9 @@ FASTAPI_BASE_URL  = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "").strip()
 FLASK_SECRET_KEY  = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
 HISTORY_FILE      = Path(os.getenv("HISTORY_FILE", str(_HERE / "data" / "history.json")))
-MAX_UPLOAD_MB     = int(os.getenv("MAX_UPLOAD_MB", "200"))
+
+# ── FILE SIZE: 5 MB hard limit (matches frontend) ─────────────
+MAX_UPLOAD_MB     = int(os.getenv("MAX_UPLOAD_MB", "5"))
 
 PORT              = int(os.getenv("PORT", os.getenv("FLASK_PORT", 7860)))
 IS_PRODUCTION     = os.getenv("RENDER", "") != ""
@@ -45,7 +47,7 @@ GROQ_REQUEST_TIMEOUT = 30
 ALLOWED_IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
 ALLOWED_VIDEO_EXTS = {"mp4", "avi", "mov", "mkv", "webm", "flv"}
 
-IMAGE_FAKE_THRESHOLD = 0.50
+IMAGE_FAKE_THRESHOLD = float(os.getenv("FAKE_THRESHOLD", "0.50"))
 
 
 # ── FACTORY ───────────────────────────────────────────────────
@@ -104,6 +106,7 @@ def create_app() -> Flask:
             "sightengine_configured": False,
             "pipeline":               "cnn-only",
             "fake_threshold":         IMAGE_FAKE_THRESHOLD,
+            "max_upload_mb":          MAX_UPLOAD_MB,
             "environment":            "production" if IS_PRODUCTION else "development",
             "timestamp":              datetime.utcnow().isoformat() + "Z",
         })
@@ -119,7 +122,16 @@ def create_app() -> Flask:
             return jsonify({"error": "Unsupported image type"}), 415
 
         file_bytes = file.read()
-        filename   = secure_filename(file.filename or "upload.jpg")
+
+        # ── Server-side 5 MB guard (second layer after frontend) ──
+        max_bytes = MAX_UPLOAD_MB * 1024 * 1024
+        if len(file_bytes) > max_bytes:
+            return jsonify({
+                "error": f"File too large. Maximum allowed size is {MAX_UPLOAD_MB} MB. "
+                         f"Received {len(file_bytes) / 1048576:.2f} MB."
+            }), 413
+
+        filename = secure_filename(file.filename or "upload.jpg")
 
         try:
             resp = requests.post(
@@ -153,7 +165,16 @@ def create_app() -> Flask:
         if not _allowed_file(file.filename, ALLOWED_VIDEO_EXTS):
             return jsonify({"error": "Unsupported video type"}), 415
 
-        file_bytes   = file.read()
+        file_bytes = file.read()
+
+        # ── Server-side 5 MB guard ────────────────────────────
+        max_bytes = MAX_UPLOAD_MB * 1024 * 1024
+        if len(file_bytes) > max_bytes:
+            return jsonify({
+                "error": f"File too large. Maximum allowed size is {MAX_UPLOAD_MB} MB. "
+                         f"Received {len(file_bytes) / 1048576:.2f} MB."
+            }), 413
+
         filename     = secure_filename(file.filename or "upload.mp4")
         content_type = file.content_type or "video/mp4"
 
@@ -210,7 +231,9 @@ def create_app() -> Flask:
     # ── ERROR HANDLERS ────────────────────────────────────────
     @app.errorhandler(413)
     def too_large(e):
-        return jsonify({"error": f"File too large. Max size: {MAX_UPLOAD_MB} MB"}), 413
+        return jsonify({
+            "error": f"File too large. Maximum allowed size is {MAX_UPLOAD_MB} MB."
+        }), 413
 
     @app.errorhandler(404)
     def not_found(e):
@@ -312,7 +335,8 @@ if __name__ == "__main__":
     print(f"   FastAPI backend : {FASTAPI_BASE_URL}")
     print(f"   Groq configured : {'✅' if GROQ_API_KEY else '❌  (add GROQ_API_KEY to .env)'}")
     print(f"   Pipeline        : CNN-only (MobileNetV2 deepfake_model.h5)")
-    print(f"   Fake threshold  : {IMAGE_FAKE_THRESHOLD} (fake_prob = 1 − sigmoid)")
+    print(f"   Fake threshold  : {IMAGE_FAKE_THRESHOLD}")
+    print(f"   Max upload size : {MAX_UPLOAD_MB} MB")
     print(f"   Environment     : {'🌐 Production (Render)' if IS_PRODUCTION else '💻 Development'}")
     print(f"   Debug mode      : {FLASK_DEBUG}")
     print(f"   .env path       : {_HERE / '.env'}\n")
