@@ -256,13 +256,13 @@ body {
 
 /* ── VIEW BASE ────────────────────────────────── */
 .view {
-  display: none;
+  display: none !important;
   flex-direction: column;
   flex: 1;
-  min-height: 0;     /* critical for flex children to scroll */
+  min-height: 0;
   overflow: hidden;
 }
-.view.active { display: flex; }
+.view.active { display: flex !important; }
 
 /* ══════════════════════════════════════════════
    CHAT VIEW — critical flex structure
@@ -270,7 +270,6 @@ body {
    input-dock: fixed height, never shrinks
 ══════════════════════════════════════════════ */
 #view-chat {
-  display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
