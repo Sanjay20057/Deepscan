@@ -305,10 +305,15 @@ async function runAnalysis() {
   if (isAnalysing) return;
   if (!selectedFile) { showError('Please upload a file first.'); return; }
 
+  // In runAnalysis(), replace the top of the function:
   isAnalysing = true;
   setSendBtn(true);
   saveSettings();
   lastResult = null;
+
+  // ADD THESE TWO LINES — snapshot before any async work:
+  const analysisFile       = selectedFile;
+  const analysisPreviewUrl = lastPreviewUrl;
 
   const isImage = currentMode === 'image';
 
@@ -317,8 +322,8 @@ async function runAnalysis() {
     `<div style="font-weight:500">${selectedFile.name}</div>`
   );
 
-  if (lastPreviewUrl && isImage) {
-    addBotMessage(`<img src="${lastPreviewUrl}" class="analysis-img" alt="uploaded" />`);
+  if (analysisPreviewUrl && isImage) {
+    addBotMessage(`<img src="${analysisPreviewUrl}" class="analysis-img" alt="uploaded" />`);
   }
 
   let typingId = addTyping('Checking server…');
@@ -375,9 +380,15 @@ async function runAnalysis() {
   } finally {
     isAnalysing = false;
     setSendBtn(false);
+    // Restore file state so it remains selected after analysis
+    selectedFile    = analysisFile;
+    lastPreviewUrl  = analysisPreviewUrl;
+    // Re-show the preview strip if it was cleared
+    if (selectedFile) {
+      const strip = document.getElementById('gemini-preview-strip');
+      if (strip) strip.style.display = 'block';
+    }
   }
-}
-
 // ─────────────────────────────────────────────────────────────
 //  DEMO BUILDER — CNN-only, threshold 0.50, no Sightengine
 // ─────────────────────────────────────────────────────────────
