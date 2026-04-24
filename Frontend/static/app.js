@@ -1,3 +1,4 @@
+cat > /home/claude/app.js << 'ENDOFFILE'
 'use strict';
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -305,21 +306,20 @@ async function runAnalysis() {
   if (isAnalysing) return;
   if (!selectedFile) { showError('Please upload a file first.'); return; }
 
-  // In runAnalysis(), replace the top of the function:
   isAnalysing = true;
   setSendBtn(true);
   saveSettings();
   lastResult = null;
 
-  // ADD THESE TWO LINES — snapshot before any async work:
+  // Snapshot file + preview so they survive the full async run
   const analysisFile       = selectedFile;
   const analysisPreviewUrl = lastPreviewUrl;
 
   const isImage = currentMode === 'image';
 
   addUserMessage(
-    `<div style="font-size:0.78rem;color:var(--text-2);margin-bottom:4px">${isImage ? 'Image' : 'Video'} · ${(selectedFile.size / 1e6).toFixed(2)} MB</div>` +
-    `<div style="font-weight:500">${selectedFile.name}</div>`
+    `<div style="font-size:0.78rem;color:var(--text-2);margin-bottom:4px">${isImage ? 'Image' : 'Video'} · ${(analysisFile.size / 1e6).toFixed(2)} MB</div>` +
+    `<div style="font-weight:500">${analysisFile.name}</div>`
   );
 
   if (analysisPreviewUrl && isImage) {
@@ -337,7 +337,7 @@ async function runAnalysis() {
       removeTyping(typingId);
       typingId = addTyping(isImage ? 'Running CNN model…' : 'Extracting frames… (30–90s)');
       const fd = new FormData();
-      fd.append('file', selectedFile, selectedFile.name);
+      fd.append('file', analysisFile, analysisFile.name);
       let res;
       try {
         res    = await fetch(`${FLASK_ORIGIN}/api/analyse/${isImage ? 'image' : 'video'}`, { method: 'POST', body: fd });
@@ -369,8 +369,8 @@ async function runAnalysis() {
 
     removeTyping(typingId);
     lastResult = result;
-    await renderResult(result, isImage, isDemo);
-    pushHistory(selectedFile, result);
+    await renderResult(result, isImage, isDemo, analysisPreviewUrl);
+    pushHistory(analysisFile, result, analysisPreviewUrl);
     renderHistory();
 
   } catch (err) {
@@ -380,15 +380,25 @@ async function runAnalysis() {
   } finally {
     isAnalysing = false;
     setSendBtn(false);
-    // Restore file state so it remains selected after analysis
-    selectedFile    = analysisFile;
-    lastPreviewUrl  = analysisPreviewUrl;
-    // Re-show the preview strip if it was cleared
-    if (selectedFile) {
+    // Restore file state so the selected file remains after analysis completes
+    selectedFile   = analysisFile;
+    lastPreviewUrl = analysisPreviewUrl;
+    // Re-show preview strip in case anything cleared it during the async run
+    if (analysisFile) {
       const strip = document.getElementById('gemini-preview-strip');
+      const fname = document.getElementById('gemini-file-name');
+      const ph    = document.getElementById('gemini-placeholder');
       if (strip) strip.style.display = 'block';
+      if (fname) fname.textContent   = analysisFile.name;
+      if (ph)    ph.style.display    = 'none';
+      if (analysisPreviewUrl) {
+        const img = document.getElementById('gemini-preview-img');
+        if (img) { img.src = analysisPreviewUrl; img.style.display = 'block'; }
+      }
     }
   }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  DEMO BUILDER — CNN-only, threshold 0.50, no Sightengine
 // ─────────────────────────────────────────────────────────────
@@ -437,7 +447,10 @@ function buildDemoResult(isImage) {
 // ═════════════════════════════════════════════════════════════
 //  RENDER RESULT — no Sightengine chip, threshold 0.50
 // ═════════════════════════════════════════════════════════════
-async function renderResult(result, isImage, isDemo) {
+async function renderResult(result, isImage, isDemo, previewUrl) {
+  // Accept previewUrl as param so we use the snapshotted value, not the global
+  const resolvedPreviewUrl = previewUrl !== undefined ? previewUrl : lastPreviewUrl;
+
   const verdict  = result.verdict  || 'unknown';
   const fakeProb = parseFloat(result.fake_probability) || 0;
   const isFake   = verdict === 'fake';
@@ -487,15 +500,14 @@ async function renderResult(result, isImage, isDemo) {
     </div>`);
 
   if (isImage) {
-    const previewUrl = lastPreviewUrl || '';
-    const cnnConf    = result.cnn_confidence != null ? pct(result.cnn_confidence).toFixed(1) + '%' : '–';
+    const cnnConf = result.cnn_confidence != null ? pct(result.cnn_confidence).toFixed(1) + '%' : '–';
 
     addBotMessage(`
       <div class="signal-wrap">
-        ${previewUrl ? `
+        ${resolvedPreviewUrl ? `
           <div>
             <div style="font-size:0.7rem;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">Analysed image</div>
-            <img src="${previewUrl}" class="analysis-img" style="max-width:200px;border:2px solid ${isFake ? 'var(--fake)' : 'var(--real)'}" alt="analysed" />
+            <img src="${resolvedPreviewUrl}" class="analysis-img" style="max-width:200px;border:2px solid ${isFake ? 'var(--fake)' : 'var(--real)'}" alt="analysed" />
           </div>` : ''}
         <div class="signal-table">
           <table>
@@ -910,20 +922,12 @@ function palette() {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// FIX: makeHelpers now also returns safeStr() and T() so that
-//      buildVideoPDF (which destructures them) can use them.
-//      buildImagePDF does NOT destructure T or safeStr so it
-//      is completely unaffected.
-// ─────────────────────────────────────────────────────────────
 function makeHelpers(doc, C, W, M) {
-  // safeStr — converts any value to a safe string for jsPDF
   function safeStr(val, fallback) {
     if (val === null || val === undefined) return fallback !== undefined ? String(fallback) : '';
     return String(val);
   }
 
-  // T — thin wrapper around doc.text that auto-coerces to string
   function T(text, x, y, opts) {
     const str = (text === null || text === undefined) ? '' : String(text);
     if (opts) doc.text(str, x, y, opts);
@@ -991,8 +995,7 @@ function makeHelpers(doc, C, W, M) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  IMAGE PDF — CNN-only, no Sightengine rows
-//  *** UNCHANGED — exactly as original ***
+//  IMAGE PDF
 // ═════════════════════════════════════════════════════════════
 async function buildImagePDF(jsPDF, result) {
   const doc      = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -1009,7 +1012,6 @@ async function buildImagePDF(jsPDF, result) {
   const now      = new Date().toLocaleString();
   const groqKey  = getGroqKey();
 
-  // ── Groq sections ──────────────────────────────────────────
   const introPrompt =
 `You are a professional forensic AI analyst writing a formal deepfake detection report for a non-technical audience.
 Pipeline: CNN-only (MobileNetV2 deepfake_model.h5). fake_prob = 1 - raw_sigmoid. Threshold: 50%.
@@ -1088,7 +1090,6 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
 
   let y = 48;
 
-  // File info bar
   doc.setFillColor(...C.bg1);
   doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'F');
   doc.setDrawColor(...C.border);
@@ -1106,7 +1107,6 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   doc.text(`${(fakeProb * 100).toFixed(1)}%`, M + 132, y + 12);
   y += 22;
 
-  // Analysed image + verdict panel
   y = sectionHead('ANALYSED IMAGE', y);
   const imgData = lastPreviewUrl ? await loadImageForPDF(lastPreviewUrl) : null;
   if (imgData) {
@@ -1166,7 +1166,6 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   doc.text('0%', M, y + 11); doc.text('100%', W - M, y + 11, { align: 'right' });
   y += 18;
 
-  // Detection metrics — CNN only (4 chips)
   y = sectionHead('DETECTION METRICS', y);
   const metrics = [
     { label: 'Verdict',        value: verdict.toUpperCase(),                                                                 color: verdictC },
@@ -1179,7 +1178,6 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   metrics.forEach((m, i) => chip(M + i * (chipW + gap), y, chipW, 18, m.label, m.value, m.color));
   y += 26;
 
-  // CNN signal table (no Sightengine row)
   y = sectionHead('CNN SIGNAL DETAIL', y);
   const tRows = [
     { src: 'CNN Neural Network (MobileNetV2)', score: result.cnn_confidence != null ? `${(result.cnn_confidence * 100).toFixed(1)}%` : '-', label: (result.cnn_label || '-').toUpperCase() },
@@ -1288,14 +1286,8 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
 }
 
 // ═════════════════════════════════════════════════════════════
-//  VIDEO PDF — FIXED: safeStr and T are now destructured from
-//              makeHelpers (which now returns them).
+//  VIDEO PDF
 // ═════════════════════════════════════════════════════════════
-
-/**
- * Decode a base64 thumbnail and return { dataUrl, w, h, ratio }
- * Falls back to null if anything fails.
- */
 async function decodeThumbnail(b64) {
   if (!b64 || b64.length < 100) return null;
   return new Promise(resolve => {
@@ -1320,11 +1312,8 @@ async function buildVideoPDF(jsPDF, result) {
   const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const C    = palette();
   const W = 210, M = 16;
-  // FIX: destructure safeStr and T from makeHelpers
   const { fillBg, sectionHead, chip, prose, hr, footer, safeStr, T } = makeHelpers(doc, C, W, M);
 
-  // Convenience alias that matches the original code's usage pattern:
-  // s(val, fallback) === safeStr(val, fallback)
   function s(val, fallback) {
     return safeStr(val, fallback !== undefined ? fallback : '');
   }
@@ -1342,14 +1331,12 @@ async function buildVideoPDF(jsPDF, result) {
   const groqKey    = getGroqKey();
   const fakeRatio  = frames.length > 0 ? fakeFrames.length / frames.length : 0;
 
-  // ── Pre-decode ALL thumbnails so we know their real dimensions ──
   const thumbCache = [];
   for (const fr of frames) {
     const t = await decodeThumbnail(fr.thumbnail_b64 || '');
-    thumbCache.push(t); // null if no thumb
+    thumbCache.push(t);
   }
 
-  // ── addContPage helper ─────────────────────────────────────
   function addContPage(subtitle) {
     doc.addPage();
     fillBg();
@@ -1365,7 +1352,6 @@ async function buildVideoPDF(jsPDF, result) {
     return 22;
   }
 
-  // ── Groq sections ──────────────────────────────────────────
   const summaryPrompt =
 `You are a senior digital forensics analyst writing a professional video deepfake detection report.
 Pipeline: CNN-only (MobileNetV2). fake_prob = 1 - sigmoid. Threshold: 50%.
@@ -1389,7 +1375,6 @@ Write 4 concise, professional plain-prose sentences for the executive summary.`;
     `The overall video verdict was derived from the mean fake probability across all sampled frames.`
   ));
 
-  // Per-frame narratives
   const frameNarratives = [];
   for (const fr of frames) {
     const frProb   = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
@@ -1544,54 +1529,40 @@ Write 4 concise, professional plain-prose sentences for the executive summary.`;
   T('Real (<50%)', M + 52, y + 3.5);
   y += 12;
 
-  // ── PAGES 3+ — Per-frame cards (FIXED aspect-ratio-aware) ──
+  // ── PAGES 3+ — Per-frame cards ─────────────────────────────
   y = addContPage('Frame-by-Frame Analysis');
   y = sectionHead('COMPLETE FRAME ANALYSIS -- ALL ' + frames.length + ' FRAMES', y);
 
-  // Layout constants
   const COLS        = 2;
   const GAP         = 5;
   const CARD_W      = (W - M * 2 - GAP * (COLS - 1)) / COLS;
-  // INFO_H_BASE: fixed area for header row + 2 metric chips + prob bar (no narrative)
-  // narrative text height is added dynamically per row
-  const INFO_H_BASE   = 42;        // slightly more padding for header+chips+bar
-const NAR_FONT_SZ   = 5.8;
-const NAR_LINE_H    = 4.2;       // fixed line height in mm (more reliable than formula)
-const MAX_NAR_LINES = 4;
-const NAR_MAX_W     = CARD_W - 8;
-  const PAGE_BOTTOM = 278;  // safe bottom margin
+  const INFO_H_BASE   = 42;
+  const NAR_FONT_SZ   = 5.8;
+  const NAR_LINE_H    = 4.2;
+  const MAX_NAR_LINES = 4;
+  const NAR_MAX_W     = CARD_W - 8;
+  const PAGE_BOTTOM = 278;
 
-  /**
-   * Compute the rendered thumbnail dimensions for a card of width CARD_W,
-   * preserving the actual pixel aspect ratio of the frame.
-   * Falls back to 16:9 when no thumb is available.
-   */
   function thumbDims(thumbData) {
-    const maxThumbH = 75; // max thumbnail height in mm
+    const maxThumbH = 75;
     if (thumbData && thumbData.ratio && isFinite(thumbData.ratio)) {
       const h = CARD_W / thumbData.ratio;
       return { w: CARD_W, h: Math.min(h, maxThumbH) };
     }
-    // fallback: 16:9
     return { w: CARD_W, h: Math.min(CARD_W * 9 / 16, maxThumbH) };
   }
 
-  /**
-   * Calculate how tall the info section will be for a given narrative string.
-   * Uses jsPDF's splitTextToSize to get the real line count, capped at MAX_NAR_LINES.
-   */
   function calcInfoH(narrative) {
-  if (!narrative) return INFO_H_BASE + 4;
-  doc.setFontSize(NAR_FONT_SZ);
-  doc.setFont('helvetica', 'normal');
-  const lines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
-  const visibleLines = Math.min(lines.length, MAX_NAR_LINES);
-  const narH = visibleLines * NAR_LINE_H + 10; // 10 = top gap + bottom padding
-  return INFO_H_BASE + narH;
-}
+    if (!narrative) return INFO_H_BASE + 4;
+    doc.setFontSize(NAR_FONT_SZ);
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
+    const visibleLines = Math.min(lines.length, MAX_NAR_LINES);
+    const narH = visibleLines * NAR_LINE_H + 10;
+    return INFO_H_BASE + narH;
+  }
 
   for (let i = 0; i < frames.length; i += COLS) {
-    // Gather cards for this row (up to COLS)
     const rowCards = [];
     for (let c = 0; c < COLS && i + c < frames.length; c++) {
       const idx   = i + c;
@@ -1602,19 +1573,15 @@ const NAR_MAX_W     = CARD_W - 8;
       rowCards.push({ idx, fr, td, dims, narr });
     }
 
-    // Row thumb height = tallest thumbnail in row (so both cards align)
     const rowThumbH = Math.max(...rowCards.map(rc => rc.dims.h));
-    // Row info height = tallest info section in row (so card bottoms align)
     const rowInfoH  = Math.max(...rowCards.map(rc => calcInfoH(rc.narr)));
     const CARD_H    = rowThumbH + rowInfoH;
 
-    // Page break check
     if (y + CARD_H > PAGE_BOTTOM) {
       y = addContPage('Frame-by-Frame Analysis (continued)');
       y = sectionHead('FRAME ANALYSIS CONTINUED', y);
     }
 
-    // Draw each card in this row
     for (let c = 0; c < rowCards.length; c++) {
       const { idx, fr, td, dims, narr } = rowCards[c];
       const prob     = clamp(parseFloat(fr.fake_prob || 0), 0, 1);
@@ -1625,13 +1592,11 @@ const NAR_MAX_W     = CARD_W - 8;
       const cx = M + c * (CARD_W + GAP);
       const cy = y;
 
-      // Card background
       doc.setFillColor(...(frIsFake ? [32, 12, 12] : [12, 28, 16]));
       doc.roundedRect(cx, cy, CARD_W, CARD_H, 3, 3, 'F');
       doc.setDrawColor(...fColor); doc.setLineWidth(0.5);
       doc.roundedRect(cx, cy, CARD_W, CARD_H, 3, 3, 'S');
 
-      // ── Thumbnail area (always rowThumbH tall) ──
       if (td && td.dataUrl) {
         const availW = CARD_W;
         const availH = rowThumbH;
@@ -1656,13 +1621,11 @@ const NAR_MAX_W     = CARD_W - 8;
             cx + CARD_W / 2, cy + rowThumbH / 2, { align: 'center' });
         }
 
-        // Badge top-left
         doc.setFillColor(...(frIsFake ? [180, 20, 20] : [20, 130, 50]));
         doc.roundedRect(cx + 2, cy + 2, frIsFake ? 14 : 12, 6, 1.5, 1.5, 'F');
         doc.setTextColor(255, 255, 255); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold');
         T(frIsFake ? 'FAKE' : 'REAL', cx + (frIsFake ? 9 : 8), cy + 6, { align: 'center' });
 
-        // Prob badge bottom-right
         doc.setFillColor(0, 0, 0);
         doc.roundedRect(cx + CARD_W - 18, cy + rowThumbH - 8, 16, 7, 1.5, 1.5, 'F');
         doc.setTextColor(...fColor); doc.setFontSize(6); doc.setFont('helvetica', 'bold');
@@ -1670,7 +1633,6 @@ const NAR_MAX_W     = CARD_W - 8;
           cx + CARD_W - 10, cy + rowThumbH - 3, { align: 'center' });
 
       } else {
-        // No thumbnail — styled placeholder preserving rowThumbH
         doc.setFillColor(...C.bg2);
         doc.rect(cx, cy, CARD_W, rowThumbH, 'F');
         doc.setDrawColor(...fColor); doc.setLineWidth(0.3);
@@ -1688,17 +1650,14 @@ const NAR_MAX_W     = CARD_W - 8;
           midX, cy + rowThumbH - 5, { align: 'center' });
       }
 
-      // ── Info area below thumbnail ──
       let iy = cy + rowThumbH + 4;
 
-      // Frame index + timestamp
       doc.setTextColor(...C.t0); doc.setFontSize(7); doc.setFont('helvetica', 'bold');
       T('#' + s(fr.frame_index), cx + 3, iy + 4);
       doc.setTextColor(...C.t2); doc.setFontSize(6); doc.setFont('helvetica', 'normal');
       const idxW = doc.getTextWidth('#' + s(fr.frame_index));
       T('@ ' + s(fr.timestamp_sec) + 's', cx + 3 + idxW + 2, iy + 4);
 
-      // Verdict pill
       const pillW = frIsFake ? 12 : 10;
       doc.setFillColor(...(frIsFake ? [160, 30, 30] : [30, 120, 50]));
       doc.roundedRect(cx + CARD_W - pillW - 3, iy, pillW, 6, 1.5, 1.5, 'F');
@@ -1706,7 +1665,6 @@ const NAR_MAX_W     = CARD_W - 8;
       T(frIsFake ? 'FAKE' : 'REAL', cx + CARD_W - pillW / 2 - 3, iy + 4.2, { align: 'center' });
       iy += 8;
 
-      // 2 metric chips
       const metW = (CARD_W - 6) / 2;
       const metDefs = [
         { lbl: 'CNN Conf.',  val: fr.cnn_confidence != null ? (fr.cnn_confidence * 100).toFixed(0) + '%' : '-', col: C.t1   },
@@ -1723,7 +1681,6 @@ const NAR_MAX_W     = CARD_W - 8;
       });
       iy += 13;
 
-      // Probability bar with threshold tick
       const pbW = CARD_W - 6;
       doc.setFillColor(...C.bg3); doc.roundedRect(cx + 3, iy, pbW, 3, 1.5, 1.5, 'F');
       if (prob > 0) {
@@ -1735,24 +1692,20 @@ const NAR_MAX_W     = CARD_W - 8;
       doc.line(tickX, iy - 1, tickX, iy + 4);
       iy += 6;
 
-      // Narrative text (max 4 lines) — font size matches calcInfoH's NAR_FONT_SZ
-      // AFTER (fixed) — use doc.text() directly with array, never T():
-if (narrative) {
-  doc.setTextColor(...C.t1);
-  doc.setFontSize(NAR_FONT_SZ);
-  doc.setFont('helvetica', 'normal');
-  const narLines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
-  if (narLines && narLines.length > 0) {
-    const visLines = narLines.slice(0, MAX_NAR_LINES);
-    // Use doc.text() directly — it handles string arrays correctly (one line per element)
-    doc.text(visLines, cx + 4, iy + 4);
-  }
-}
-    } // end of column loop
+      if (narrative) {
+        doc.setTextColor(...C.t1);
+        doc.setFontSize(NAR_FONT_SZ);
+        doc.setFont('helvetica', 'normal');
+        const narLines = doc.splitTextToSize(String(narrative), NAR_MAX_W);
+        if (narLines && narLines.length > 0) {
+          const visLines = narLines.slice(0, MAX_NAR_LINES);
+          doc.text(visLines, cx + 4, iy + 4);
+        }
+      }
+    }
 
-    // Advance y by the row height
     y += CARD_H + GAP;
-  } // end of frame loop
+  }
 
   // ── Frame data table ───────────────────────────────────────
   y = addContPage('Complete Frame Data Table');
@@ -1848,14 +1801,15 @@ if (narrative) {
 // ═════════════════════════════════════════════════════════════
 //  HISTORY
 // ═════════════════════════════════════════════════════════════
-function pushHistory(file, result) {
-  const previewUrl = currentMode === 'image' ? (lastPreviewUrl || '') : '';
+function pushHistory(file, result, previewUrl) {
+  // Accept previewUrl as param so we use the snapshotted value
+  const resolvedPreview = previewUrl !== undefined ? previewUrl : (currentMode === 'image' ? (lastPreviewUrl || '') : '');
   analysisHistory.unshift({
     id: Date.now(), name: file.name,
     type: result.media_type || currentMode,
     verdict: result.verdict || 'unknown',
     fakeProb: parseFloat(result.fake_probability) || 0,
-    preview: previewUrl, ts: timeStr()
+    preview: resolvedPreview, ts: timeStr()
   });
   if (analysisHistory.length > 50) analysisHistory.length = 50;
   try { localStorage.setItem('deepscan_history', JSON.stringify(analysisHistory)); } catch (_) {}
