@@ -314,18 +314,31 @@ async function runAnalysis() {
   const analysisFile       = selectedFile;
   const analysisPreviewUrl = lastPreviewUrl;
 
-  // Smoothly animate out the file chip, then clear
+  // Smooth scale-down + fade out before clearing
   const strip = document.getElementById('gemini-preview-strip');
   if (strip && strip.style.display !== 'none') {
-    strip.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-    strip.style.opacity    = '0';
-    strip.style.transform  = 'translateY(-6px)';
+    const chip = strip.querySelector('.gemini-file-chip');
+    if (chip) {
+      chip.style.transition  = 'opacity 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.35s cubic-bezier(0.4,0,0.2,1), max-width 0.35s cubic-bezier(0.4,0,0.2,1)';
+      chip.style.opacity     = '0';
+      chip.style.transform   = 'scale(0.85)';
+      chip.style.maxWidth    = '0';
+      chip.style.overflow    = 'hidden';
+      chip.style.paddingLeft = '0';
+      chip.style.paddingRight= '0';
+    }
     setTimeout(() => {
-      strip.style.transition = '';
-      strip.style.opacity    = '';
-      strip.style.transform  = '';
+      if (chip) {
+        chip.style.transition   = '';
+        chip.style.opacity      = '';
+        chip.style.transform    = '';
+        chip.style.maxWidth     = '';
+        chip.style.overflow     = '';
+        chip.style.paddingLeft  = '';
+        chip.style.paddingRight = '';
+      }
       removeFile();
-    }, 300);
+    }, 360);
   } else {
     removeFile();
   }
