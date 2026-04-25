@@ -1,4 +1,3 @@
-cat > /home/claude/app.js << 'ENDOFFILE'
 'use strict';
 
 // ── STATE ─────────────────────────────────────────────────────
