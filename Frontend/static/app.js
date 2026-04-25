@@ -310,9 +310,12 @@ async function runAnalysis() {
   saveSettings();
   lastResult = null;
 
-  // Snapshot file + preview so they survive the full async run
+  // Snapshot file + preview before clearing the UI
   const analysisFile       = selectedFile;
   const analysisPreviewUrl = lastPreviewUrl;
+
+  // Clear the input dock immediately when Analyse is clicked
+  removeFile();
 
   const isImage = currentMode === 'image';
 
@@ -379,8 +382,6 @@ async function runAnalysis() {
   } finally {
     isAnalysing = false;
     setSendBtn(false);
-    // Auto-clear the selected file after analysis completes
-    removeFile();
   }
 }
 
