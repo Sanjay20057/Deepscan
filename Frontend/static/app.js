@@ -314,8 +314,21 @@ async function runAnalysis() {
   const analysisFile       = selectedFile;
   const analysisPreviewUrl = lastPreviewUrl;
 
-  // Clear the input dock immediately when Analyse is clicked
-  removeFile();
+  // Smoothly animate out the file chip, then clear
+  const strip = document.getElementById('gemini-preview-strip');
+  if (strip && strip.style.display !== 'none') {
+    strip.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    strip.style.opacity    = '0';
+    strip.style.transform  = 'translateY(-6px)';
+    setTimeout(() => {
+      strip.style.transition = '';
+      strip.style.opacity    = '';
+      strip.style.transform  = '';
+      removeFile();
+    }, 300);
+  } else {
+    removeFile();
+  }
 
   const isImage = currentMode === 'image';
 
