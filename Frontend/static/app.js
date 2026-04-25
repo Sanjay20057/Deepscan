@@ -379,22 +379,8 @@ async function runAnalysis() {
   } finally {
     isAnalysing = false;
     setSendBtn(false);
-    // Restore file state so the selected file remains after analysis completes
-    selectedFile   = analysisFile;
-    lastPreviewUrl = analysisPreviewUrl;
-    // Re-show preview strip in case anything cleared it during the async run
-    if (analysisFile) {
-      const strip = document.getElementById('gemini-preview-strip');
-      const fname = document.getElementById('gemini-file-name');
-      const ph    = document.getElementById('gemini-placeholder');
-      if (strip) strip.style.display = 'block';
-      if (fname) fname.textContent   = analysisFile.name;
-      if (ph)    ph.style.display    = 'none';
-      if (analysisPreviewUrl) {
-        const img = document.getElementById('gemini-preview-img');
-        if (img) { img.src = analysisPreviewUrl; img.style.display = 'block'; }
-      }
-    }
+    // Auto-clear the selected file after analysis completes
+    removeFile();
   }
 }
 
