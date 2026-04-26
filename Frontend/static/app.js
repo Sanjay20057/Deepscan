@@ -1007,7 +1007,8 @@ function makeHelpers(doc, C, W, M) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  IMAGE PDF
+//  IMAGE PDF — CNN-only, no Sightengine rows
+//  *** UNCHANGED — exactly as original ***
 // ═════════════════════════════════════════════════════════════
 async function buildImagePDF(jsPDF, result) {
   const doc      = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -1024,6 +1025,7 @@ async function buildImagePDF(jsPDF, result) {
   const now      = new Date().toLocaleString();
   const groqKey  = getGroqKey();
 
+  // ── Groq sections ──────────────────────────────────────────
   const introPrompt =
 `You are a professional forensic AI analyst writing a formal deepfake detection report for a non-technical audience.
 Pipeline: CNN-only (MobileNetV2 deepfake_model.h5). fake_prob = 1 - raw_sigmoid. Threshold: 50%.
@@ -1102,6 +1104,7 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
 
   let y = 48;
 
+  // File info bar
   doc.setFillColor(...C.bg1);
   doc.roundedRect(M, y, W - M * 2, 16, 3, 3, 'F');
   doc.setDrawColor(...C.border);
@@ -1119,6 +1122,7 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   doc.text(`${(fakeProb * 100).toFixed(1)}%`, M + 132, y + 12);
   y += 22;
 
+  // Analysed image + verdict panel
   y = sectionHead('ANALYSED IMAGE', y);
   const imgData = lastPreviewUrl ? await loadImageForPDF(lastPreviewUrl) : null;
   if (imgData) {
@@ -1178,6 +1182,7 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   doc.text('0%', M, y + 11); doc.text('100%', W - M, y + 11, { align: 'right' });
   y += 18;
 
+  // Detection metrics — CNN only (4 chips)
   y = sectionHead('DETECTION METRICS', y);
   const metrics = [
     { label: 'Verdict',        value: verdict.toUpperCase(),                                                                 color: verdictC },
@@ -1190,6 +1195,7 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
   metrics.forEach((m, i) => chip(M + i * (chipW + gap), y, chipW, 18, m.label, m.value, m.color));
   y += 26;
 
+  // CNN signal table (no Sightengine row)
   y = sectionHead('CNN SIGNAL DETAIL', y);
   const tRows = [
     { src: 'CNN Neural Network (MobileNetV2)', score: result.cnn_confidence != null ? `${(result.cnn_confidence * 100).toFixed(1)}%` : '-', label: (result.cnn_label || '-').toUpperCase() },
