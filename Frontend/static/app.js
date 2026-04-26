@@ -397,6 +397,7 @@ async function runAnalysis() {
 
     removeTyping(typingId);
     lastResult = result;
+    lastResult._previewUrl = analysisPreviewUrl; // ← ADDED: save snapshot so PDF can always find it
     await renderResult(result, isImage, isDemo, analysisPreviewUrl);
     pushHistory(analysisFile, result, analysisPreviewUrl);
     renderHistory();
@@ -1008,7 +1009,6 @@ function makeHelpers(doc, C, W, M) {
 
 // ═════════════════════════════════════════════════════════════
 //  IMAGE PDF — CNN-only, no Sightengine rows
-//  *** UNCHANGED — exactly as original ***
 // ═════════════════════════════════════════════════════════════
 async function buildImagePDF(jsPDF, result) {
   const doc      = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -1124,7 +1124,10 @@ Write exactly 3 short, actionable plain-prose sentences recommending next steps.
 
   // Analysed image + verdict panel
   y = sectionHead('ANALYSED IMAGE', y);
-  const imgData = lastPreviewUrl ? await loadImageForPDF(lastPreviewUrl) : null;
+  // ← ADDED: use result._previewUrl as primary source so image always appears in PDF
+  const imgData = (result._previewUrl || lastPreviewUrl)
+    ? await loadImageForPDF(result._previewUrl || lastPreviewUrl)
+    : null;
   if (imgData) {
     const maxW = 82, maxH = 72;
     const ratio = imgData.w / imgData.h;
