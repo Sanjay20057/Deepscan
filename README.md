@@ -1,10 +1,8 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/DeepScan-AI%20Deepfake%20Detector-4285f4?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTQgMkwyNiAxNEwxNCAyNkwyIDE0WiIgZmlsbD0id2hpdGUiLz48L3N2Zz4=" />
-
 # 🔍 DeepScan — AI Deepfake Detector
 
-**Detect AI-generated images and deepfake videos using a CNN (MobileNetV2) pipeline.**
+**Detect AI-generated images and deepfake videos using a CNN + ViT ensemble pipeline.**
 
 [![Backend](https://img.shields.io/badge/Backend-Hugging%20Face%20Spaces-FFD21E?style=flat-square&logo=huggingface)](https://huggingface.co/spaces/sanjay72005/deepscan)
 [![Frontend](https://img.shields.io/badge/Frontend-Netlify-00C7B7?style=flat-square&logo=netlify)](https://deepscan.netlify.app)
@@ -17,27 +15,38 @@
 
 ## 📌 Overview
 
-DeepScan is a full-stack deepfake detection web application that analyses images and videos to determine whether they are AI-generated or authentic. It uses a fine-tuned **MobileNetV2 CNN** as its core classification model, served via a **Flask + FastAPI** backend hosted on **Hugging Face Spaces**, with a polished **chat-style frontend** deployed on **Netlify**.
+DeepScan is a full-stack deepfake detection web application that analyses images and videos to determine whether they are AI-generated or authentic. It uses a fine-tuned **MobileNetV2 CNN** ensembled with a **HuggingFace ViT** (`Wvolf/ViT_Deepfake_Detection`) as its core classification models, served via a **Flask + FastAPI** backend hosted on **Hugging Face Spaces**, with a polished **chat-style frontend** deployed on **Netlify**.
 
-The scoring formula is:
+The scoring pipeline differs by media type:
+
+**Image:**
 
 ```
-fake_prob = 1.0 − raw_sigmoid(model_output)
+cnn_fake_prob  = raw_sigmoid                        (IMAGE_INVERT_SIGMOID = False)
+hf_fake_prob   = ViT score for "fake" label
+fake_prob      = max(cnn_fake_prob, hf_fake_prob)   ← ensemble
+threshold      = 0.35
 ```
 
-A threshold of **0.50** is applied — scores at or above 0.50 are classified as **FAKE**, below as **REAL**.
+**Video:**
+
+```
+fake_prob  = 1.0 − raw_sigmoid                      (VIDEO_INVERT_SIGMOID = True)
+threshold  = 0.50
+```
 
 ---
 
 ## ✨ Features
 
-- 🖼️ **Image analysis** — Upload JPG / PNG / WebP images for instant CNN deepfake scoring
-- 🎬 **Video analysis** — Frame-by-frame CNN analysis with per-frame thumbnails, timeline chart, and frame table
-- 📊 **Probability bar** — Visual fake probability gauge with 50% threshold marker
-- 🤖 **AI explanations** — Groq LLM (LLaMA 3) generates human-readable forensic explanations per scan
+- 🖼️ **Image analysis** — Upload JPG / PNG / WebP images for CNN + ViT ensemble deepfake scoring
+- 🎬 **Video analysis** — Frame-by-frame CNN analysis (25 frames sampled) with per-frame thumbnails, timeline chart, and frame table
+- 📊 **Probability bar** — Visual fake probability gauge with threshold marker
+- 🤖 **AI explanations** — Groq LLM (LLaMA 3.1 8B / 70B) generates human-readable forensic explanations per scan
 - 📄 **PDF reports** — Professional multi-page PDF report download (image & video variants)
 - 🕓 **History view** — Local scan history with thumbnails and verdict pills
 - ⚙️ **Settings panel** — Configurable thresholds, Groq API key, Flask server URL
+- 🔬 **Diagnose endpoint** — `/diagnose` API to inspect raw sigmoid values and validate model inversion settings
 - 📱 **Fully responsive** — Mobile-first design with slide-in sidebar and touch-friendly UI
 
 ---
@@ -48,14 +57,17 @@ A threshold of **0.50** is applied — scores at or above 0.50 are classified as
 ┌─────────────────────────────────┐        ┌──────────────────────────────────┐
 │         FRONTEND                │        │            BACKEND               │
 │  Netlify (Static HTML/CSS/JS)   │◄──────►│  Hugging Face Spaces             │
-│                                 │  REST  │  Flask  +  FastAPI               │
-│  • app.html  (chat UI)          │  API   │  • /api/analyse/image            │
-│  • static/style.css             │        │  • /api/analyse/video            │
-│  • static/app.js                │        │  • /api/groq/explain             │
-│  • index.html  (landing page)   │        │  • /api/status                   │
-└─────────────────────────────────┘        │                                  │
+│                                 │  REST  │  Flask (port 7860)               │
+│  • app.html  (chat UI)          │  API   │  + FastAPI (port 8000)           │
+│  • static/style.css             │        │  • /api/analyse/image            │
+│  • static/app.js                │        │  • /api/analyse/video            │
+│  • index.html  (landing page)   │        │  • /api/groq/explain             │
+└─────────────────────────────────┘        │  • /api/status                   │
+                                           │  • /diagnose                     │
+                                           │                                  │
                                            │  MobileNetV2 CNN                 │
                                            │  deepfake_model.h5               │
+                                           │  + ViT (HuggingFace ensemble)    │
                                            └──────────────────────────────────┘
 ```
 
@@ -63,9 +75,10 @@ A threshold of **0.50** is applied — scores at or above 0.50 are classified as
 |---|---|---|
 | Frontend | Vanilla HTML / CSS / JavaScript | **Netlify** |
 | Backend API | Flask + FastAPI (Python) | **Hugging Face Spaces** |
-| ML Model | MobileNetV2 (TensorFlow / Keras) | Hugging Face Spaces |
+| ML Model (Image) | MobileNetV2 CNN + ViT ensemble (TensorFlow / Keras + HuggingFace) | Hugging Face Spaces |
+| ML Model (Video) | MobileNetV2 CNN — batch frame inference | Hugging Face Spaces |
 | AI Explanations | Groq API — LLaMA 3.1 8B / 70B | Client-side or Flask proxy |
-| PDF Generation | jsPDF (client-side) | Browser |
+| PDF Generation | jsPDF 2.5.1 (client-side) | Browser |
 
 ---
 
@@ -74,18 +87,18 @@ A threshold of **0.50** is applied — scores at or above 0.50 are classified as
 ```
 Deepscan/
 ├── Backend/
-│   ├── flask_app.py                 
-│   ├── deepfake_model.h5      
-│   ├── __init__.py        
+│   ├── flask_app.py
+│   ├── deepfake_model.h5
+│   ├── __init__.py
 │   ├── start.sh
 │   ├── video_api.py
-│   └── requirements.txt       
+│   └── requirements.txt
 ├── Frontend/
 │   ├── static/
-│   │   ├── style.css          
-│   │   └── app.js             
-│   ├── app.html               
-│   └── index.html             
+│   │   ├── style.css
+│   │   └── app.js
+│   ├── app.html
+│   └── index.html
 └── README.md
 ```
 
@@ -98,25 +111,30 @@ Deepscan/
 | Detail | Value |
 |---|---|
 | Base model | MobileNetV2 (ImageNet pre-trained) |
+| Ensemble model | ViT — `Wvolf/ViT_Deepfake_Detection` (HuggingFace, images only) |
 | Fine-tuned on | Deepfake vs Real image/video dataset |
-| Output | Sigmoid (0 = fake tendency, 1 = real tendency) |
-| Scoring | `fake_prob = 1.0 − raw_sigmoid` |
-| Threshold | **0.50** |
+| Output | Sigmoid (behaviour differs by media type — see scoring above) |
+| Image scoring | `fake_prob = max(cnn_sigmoid, vit_score)` · threshold **0.35** |
+| Video scoring | `fake_prob = 1.0 − raw_sigmoid` · threshold **0.50** |
+| Frames per video | **25** (evenly sampled) |
 | Input size | 224 × 224 px |
+| Preprocessing | `mobilenet_v2.preprocess_input()` — scales to **[−1, 1]** |
 
 ### Datasets
 
 #### 🖼️ Image Dataset
-**Deepfake vs Real — 60K**
-> Prithiv Sakthiur · Kaggle
-> [https://www.kaggle.com/datasets/prithivsakthiur/deepfake-vs-real-60k](https://www.kaggle.com/datasets/prithivsakthiur/deepfake-vs-real-60k)
+
+**Deepfake vs Real — 60K** · Prithiv Sakthiur · Kaggle
+
+https://www.kaggle.com/datasets/prithivsakthiur/deepfake-vs-real-60k
 
 A balanced dataset of 60,000 images split evenly between AI-generated deepfake faces and real photographs, used to train and validate the image classification head.
 
 #### 🎬 Video Dataset
-**FaceForensics++**
-> ondyari · GitHub
-> [https://github.com/ondyari/FaceForensics](https://github.com/ondyari/FaceForensics)
+
+**FaceForensics++** · ondyari · GitHub
+
+https://github.com/ondyari/FaceForensics
 
 A large-scale benchmark dataset of manipulated facial videos covering multiple manipulation methods (DeepFakes, Face2Face, FaceSwap, NeuralTextures). Video frames were extracted and used to extend the training set for video-mode inference.
 
@@ -126,7 +144,7 @@ A large-scale benchmark dataset of manipulated facial videos covering multiple m
 
 ### Prerequisites
 
-```bash
+```
 python >= 3.10
 pip
 node (optional — for local frontend dev)
@@ -142,12 +160,12 @@ cd Deepscan
 ### 2. Install Python dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r Backend/requirements.txt
 ```
 
 ### 3. Add your model weights
 
-Place your trained `deepfake_model.h5` in the project root, or train from scratch:
+Place your trained `deepfake_model.h5` in the `Backend/` directory, or train from scratch:
 
 ```bash
 python train.py
@@ -155,28 +173,39 @@ python train.py
 
 ### 4. Configure environment variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the `Backend/` directory:
 
 ```env
 GROQ_API_KEY=gsk_your_groq_key_here
+
+# Optional overrides (defaults shown)
+FASTAPI_BASE_URL=http://localhost:8000
+FLASK_PORT=7860
+MAX_UPLOAD_MB=5
+FRAMES_PER_VIDEO=25
+IMAGE_FAKE_THRESHOLD=0.35
+VIDEO_FAKE_THRESHOLD=0.50
+IMAGE_INVERT_SIGMOID=false
+VIDEO_INVERT_SIGMOID=true
+PREPROCESS_MODE=mobilenet
 ```
 
-> **Groq API key** is optional — without it, the AI explanation feature is disabled (users can supply their own key in the UI settings panel).
+> **Groq API key** is optional — without it, the AI explanation feature is disabled. Users can supply their own key in the UI settings panel.
 
 ### 5. Start the backend
 
 ```bash
-python flask_app.py
-```
+# Option A — convenience script
+bash Backend/start.sh
 
-The Flask server starts at `http://localhost:7860` and automatically spawns the FastAPI inference service internally.
+# Option B — manually in two terminals
+python Backend/flask_app.py
+uvicorn video_api:app --host 0.0.0.0 --port 8000 --reload
+```
 
 ### 6. Open the frontend
 
-Open `app.html` in your browser, or serve statically:
-
 ```bash
-# Quick static server (Python)
 python -m http.server 3000
 # Then visit http://localhost:3000/app.html
 ```
@@ -193,7 +222,7 @@ The Flask + FastAPI backend is hosted as a **Gradio SDK Space** on Hugging Face:
 https://huggingface.co/spaces/sanjay72005/deepscan
 ```
 
-All CNN inference, frame extraction (video), and Groq proxy calls are handled here. The frontend calls this origin directly via `fetch`.
+All CNN inference, ViT ensemble scoring, frame extraction (video), and Groq proxy calls are handled here. The frontend calls this origin directly via `fetch`.
 
 ### Frontend — Netlify
 
@@ -203,31 +232,37 @@ The static frontend (`app.html`, `static/`, `index.html`) is deployed via **Netl
 https://deepscan.netlify.app
 ```
 
-No build step required — Netlify serves the files as-is. To redeploy, simply push to the connected GitHub repository or drag-and-drop the folder into the Netlify dashboard.
+No build step required — Netlify serves the files as-is. Push to the connected GitHub repository or drag-and-drop the `Frontend/` folder into the Netlify dashboard to redeploy.
 
 ---
 
 ## 🔌 API Reference
 
-All endpoints are served from the Hugging Face Spaces backend.
+All endpoints are served from `https://sanjay72005-deepscan.hf.space`.
 
 ### `GET /api/status`
-Returns server health, model load status, and Groq configuration flag.
+
+Returns server health, model load status, pipeline info, and Groq configuration flag.
 
 ```json
 {
   "fastapi_ok": true,
   "model_loaded": true,
-  "groq_configured": true
+  "groq_configured": true,
+  "pipeline": "cnn-only",
+  "fake_threshold": 0.5,
+  "max_upload_mb": 5
 }
 ```
 
 ### `POST /api/analyse/image`
-Analyse a single image for deepfake content.
+
+Analyse a single image using the CNN + ViT ensemble.
 
 **Request:** `multipart/form-data` — field `file` (JPG / PNG / WebP, max 5 MB)
 
 **Response:**
+
 ```json
 {
   "media_type": "image",
@@ -240,18 +275,20 @@ Analyse a single image for deepfake content.
 ```
 
 ### `POST /api/analyse/video`
-Analyse a video file frame-by-frame.
 
-**Request:** `multipart/form-data` — field `file` (MP4 / MOV / AVI / WebM, max 5 MB)
+Analyse a video file frame-by-frame (25 frames sampled by default).
+
+**Request:** `multipart/form-data` — field `file` (MP4 / MOV / AVI / MKV / WebM / FLV, max 5 MB)
 
 **Response:**
+
 ```json
 {
   "media_type": "video",
   "verdict": "fake",
   "fake_probability": 0.6541,
   "fake_frame_count": 14,
-  "total_frames_analysed": 20,
+  "total_frames_analysed": 25,
   "frame_results": [
     {
       "frame_index": 0,
@@ -267,11 +304,30 @@ Analyse a video file frame-by-frame.
 ```
 
 ### `POST /api/groq/explain`
+
 Proxy endpoint for Groq LLM explanation generation (uses server-side API key).
 
 **Request:**
+
 ```json
 { "prompt": "...", "max_tokens": 460 }
+```
+
+### `POST /diagnose`
+
+Debug endpoint — upload any image to inspect raw sigmoid values and verify `INVERT_SIGMOID` is set correctly for your model weights.
+
+**Response:**
+
+```json
+{
+  "raw_sigmoid": 0.123456,
+  "fake_prob_current": 0.876544,
+  "verdict_current": "FAKE",
+  "fake_prob_if_flipped": 0.123456,
+  "verdict_if_flipped": "REAL",
+  "advice": "If verdict_current is wrong for a KNOWN real image, set INVERT_SIGMOID=false..."
+}
 ```
 
 ---
@@ -280,10 +336,10 @@ Proxy endpoint for Groq LLM explanation generation (uses server-side API key).
 
 | Step | Action |
 |---|---|
-| **1** | Click the 📎 attach button or drag & drop a file |
+| **1** | Click the 📎 attach button or drag & drop a file (max 5 MB) |
 | **2** | Select **Image** or **Video** mode |
 | **3** | *(Optional)* Click ⚙️ to enter your Groq API key for AI explanations |
-| **4** | Press the 🔍 **Analyse** button |
+| **4** | Press the 🔍 **Analyse** button (or press `Enter`) |
 | **5** | View verdict, probability bar, signal table, and AI explanation |
 | **6** | Download a **Professional PDF Report** |
 
@@ -294,8 +350,10 @@ Proxy endpoint for Groq LLM explanation generation (uses server-side API key).
 ## 📦 Dependencies
 
 ### Python (Backend)
+
 ```
 flask
+flask-cors
 fastapi
 uvicorn
 tensorflow / keras
@@ -304,23 +362,26 @@ numpy
 pillow
 python-dotenv
 requests
-groq
+transformers
 ```
 
 ### JavaScript (Frontend — CDN)
+
 ```
-jsPDF  2.5.1  — client-side PDF generation
+jsPDF 2.5.1 — client-side PDF generation
 ```
 
 ---
 
 ## ⚠️ Limitations & Caveats
 
-- CNN-only pipeline — no ensemble or second-opinion model (e.g. Sightengine was removed)
-- `fake_prob = 1 − sigmoid` means the model's raw output is **inverted** — high sigmoid = more real
+- Image mode uses a CNN + ViT **ensemble** (max of both scores); video mode uses CNN only
+- Preprocessing uses `mobilenet_v2.preprocess_input()` — scales pixels to **[−1, 1]**, not plain `/255`
+- `IMAGE_INVERT_SIGMOID = False` (sigmoid used directly for images); `VIDEO_INVERT_SIGMOID = True` (`fake_prob = 1 − sigmoid` for video)
+- Image fake threshold is **0.35**; video fake threshold is **0.50**
 - Video inference can take **30–90 seconds** depending on file length and server load
 - Results are probabilistic — not a certified forensic determination
-- A 5 MB file size limit is enforced on both image and video uploads
+- A **5 MB** file size limit is enforced on both frontend and backend for all uploads
 
 ---
 
@@ -347,6 +408,7 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 - [Prithiv Sakthiur](https://www.kaggle.com/prithivsakthiur) — Deepfake vs Real 60K image dataset
 - [ondyari / FaceForensics](https://github.com/ondyari/FaceForensics) — FaceForensics++ video benchmark
 - [Google MobileNetV2](https://arxiv.org/abs/1801.04381) — Backbone CNN architecture
+- [Wvolf / ViT_Deepfake_Detection](https://huggingface.co/Wvolf/ViT_Deepfake_Detection) — HuggingFace ViT ensemble model
 - [Groq](https://groq.com) — Ultra-fast LLM inference for AI explanations
 - [Hugging Face Spaces](https://huggingface.co/spaces) — Free GPU-backed backend hosting
 - [Netlify](https://netlify.com) — Zero-config static frontend hosting
