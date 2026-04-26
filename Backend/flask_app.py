@@ -30,7 +30,7 @@ _ROOT = _HERE.parent / "Frontend"
 FASTAPI_BASE_URL  = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "").strip()
 FLASK_SECRET_KEY  = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
-HISTORY_FILE      = Path(os.getenv("HISTORY_FILE", str(_HERE / "data" / "history.json")))
+HISTORY_FILE      = Path(os.getenv("HISTORY_FILE", "/tmp/data/history.json"))
 
 # ── FILE SIZE: 5 MB hard limit (matches frontend) ─────────────
 MAX_UPLOAD_MB     = int(os.getenv("MAX_UPLOAD_MB", "5"))
