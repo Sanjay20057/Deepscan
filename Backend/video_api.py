@@ -1,6 +1,5 @@
 """
 video_api.py — FastAPI backend for video deepfake detection (CNN-Only)
-
 FIXES APPLIED:
 1. Added /diagnose endpoint to print raw sigmoid values — run this first to
    confirm whether fake_prob = 1-sigmoid or fake_prob = sigmoid is correct
@@ -13,7 +12,6 @@ FIXES APPLIED:
 4. Softened threshold logic: added LOW_CONFIDENCE_ZONE so borderline cases
    (40%-60%) are flagged as uncertain rather than hard FAKE.
 5. Better error messages and logging.
-
 Run with:  uvicorn video_api:app --host 0.0.0.0 --port 8000 --reload
 """
 
@@ -31,23 +29,31 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from transformers import pipeline as hf_pipeline
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from PIL import Image
 
 load_dotenv()
 
+hf_detector = None
+
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 IMG_SIZE          = 224
 THUMBNAIL_MAX_DIM = 240
-FRAMES_PER_VIDEO  = int(os.getenv("FRAMES_PER_VIDEO", "20"))
-FAKE_THRESHOLD    = float(os.getenv("FAKE_THRESHOLD", "0.50"))
+FRAMES_PER_VIDEO  = int(os.getenv("FRAMES_PER_VIDEO", "25"))
+FAKE_THRESHOLD       = float(os.getenv("FAKE_THRESHOLD", "0.40"))        # video threshold (kept for compat)
+IMAGE_FAKE_THRESHOLD = float(os.getenv("IMAGE_FAKE_THRESHOLD", "0.35"))  # image: flag fake if fake_prob >= 0.35
+VIDEO_FAKE_THRESHOLD = float(os.getenv("VIDEO_FAKE_THRESHOLD", "0.50"))  # video threshold
 
-# ── KEY FIX: INVERT_SIGMOID ───────────────────────────────────────────────────
-# True  → your model: HIGH sigmoid = REAL → fake_prob = 1 - sigmoid  (default)
-# False → your model: HIGH sigmoid = FAKE → fake_prob = sigmoid
-# Set INVERT_SIGMOID=false in .env if all images are coming out FAKE
-INVERT_SIGMOID    = os.getenv("INVERT_SIGMOID", "true").lower() != "false"
+# ── INVERT_SIGMOID — both image and video use True (HIGH sigmoid = REAL) ──────
+# Your model outputs HIGH = REAL for both media types.
+# For images we compensate with a very low threshold (0.15) instead.
+IMAGE_INVERT_SIGMOID = os.getenv("IMAGE_INVERT_SIGMOID", "false").lower() != "false"
+VIDEO_INVERT_SIGMOID = os.getenv("VIDEO_INVERT_SIGMOID", "true").lower() != "false"
+
+# Legacy alias
+INVERT_SIGMOID = IMAGE_INVERT_SIGMOID
 
 # ── PREPROCESSING MODE ────────────────────────────────────────────────────────
 # "mobilenet"  → uses preprocess_input() scaling to [-1, 1]  ← CORRECT for MobileNetV2
@@ -66,7 +72,7 @@ _preprocess_fn = None   # set during model load
 
 # ─── MODEL LOADING ───────────────────────────────────────────────────────────
 def _load_model():
-    global model, _preprocess_fn
+    global model, _preprocess_fn, hf_detector
     import tensorflow as tf
 
     if not os.path.exists(MODEL_PATH):
@@ -77,31 +83,40 @@ def _load_model():
 
     model = tf.keras.models.load_model(MODEL_PATH)
 
-    # Choose preprocessing function
+    # ── HuggingFace ViT detector ──────────────────────────────
+    try:
+        hf_detector = hf_pipeline(
+            "image-classification",
+            model="Wvolf/ViT_Deepfake_Detection",
+            device=-1  # CPU
+        )
+        print("✅ HuggingFace ViT detector loaded")
+    except Exception as e:
+        print(f"⚠️ HuggingFace detector failed to load: {e}")
+
+    # ── Preprocessing ─────────────────────────────────────────
     if PREPROCESS_MODE == "mobilenet":
         from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
         _preprocess_fn = preprocess_input
         print("✅ Preprocessing: MobileNetV2 preprocess_input [-1, 1]")
     else:
-        _preprocess_fn = None   # fallback: divide by 255
+        _preprocess_fn = None
         print("✅ Preprocessing: divide by 255 [0, 1]")
 
     print(f"✅ Model loaded from '{MODEL_PATH}'")
-    print(f"   INVERT_SIGMOID = {INVERT_SIGMOID}  "
-          f"({'fake_prob = 1 - sigmoid' if INVERT_SIGMOID else 'fake_prob = sigmoid'})")
-    print(f"   FAKE_THRESHOLD = {FAKE_THRESHOLD}")
-    print(f"   Input shape    = {model.input_shape}")
+    print(f"   IMAGE_INVERT_SIGMOID  = {IMAGE_INVERT_SIGMOID}")
+    print(f"   VIDEO_INVERT_SIGMOID  = {VIDEO_INVERT_SIGMOID}")
+    print(f"   IMAGE_FAKE_THRESHOLD  = {IMAGE_FAKE_THRESHOLD}")
+    print(f"   VIDEO_FAKE_THRESHOLD  = {VIDEO_FAKE_THRESHOLD}")
+    print(f"   Input shape           = {model.input_shape}")
 
-    # Quick sanity check — run a black image through the model
     try:
-        dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
-        if PREPROCESS_MODE == "mobilenet":
-            dummy_in = _preprocess_fn(dummy.copy())
-        else:
-            dummy_in = dummy
-        raw_out = float(model(dummy_in, training=False).numpy()[0][0])
-        fake_p  = (1.0 - raw_out) if INVERT_SIGMOID else raw_out
-        print(f"   Sanity check   : raw_sigmoid={raw_out:.4f}  fake_prob={fake_p:.4f}")
+        dummy    = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
+        dummy_in = _preprocess_fn(dummy.copy()) if PREPROCESS_MODE == "mobilenet" else dummy
+        raw_out  = float(model(dummy_in, training=False).numpy()[0][0])
+        print(f"   Sanity check: raw_sigmoid={raw_out:.4f}  "
+              f"img_fake_prob={_raw_to_fake_prob(raw_out, IMAGE_INVERT_SIGMOID):.4f}  "
+              f"vid_fake_prob={_raw_to_fake_prob(raw_out, VIDEO_INVERT_SIGMOID):.4f}")
     except Exception as e:
         print(f"   Sanity check failed (non-fatal): {e}")
 
@@ -172,7 +187,6 @@ def _require_model():
 def _preprocess_pil(img: Image.Image) -> np.ndarray:
     """
     Resize PIL image to IMG_SIZE x IMG_SIZE and apply the correct preprocessing.
-
     MobileNetV2 was trained expecting preprocess_input() which scales [0,255]
     to [-1, 1]. Using plain /255.0 gives wrong inputs and causes the model to
     output near-zero (or near-one) sigmoid values for EVERY image — which is
@@ -202,35 +216,51 @@ def _make_thumbnail(pil_img: Image.Image) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
-def _raw_to_fake_prob(raw_sigmoid: float) -> float:
-    """Convert raw model sigmoid output to fake probability."""
-    if INVERT_SIGMOID:
-        return 1.0 - raw_sigmoid   # HIGH sigmoid = REAL → invert
-    return raw_sigmoid             # HIGH sigmoid = FAKE → use directly
+def _raw_to_fake_prob(raw_sigmoid: float, invert: bool) -> float:
+    """Convert raw sigmoid to fake probability.
+    invert=True  → fake_prob = 1 - sigmoid  (HIGH sigmoid = REAL, your model's behaviour)
+    invert=False → fake_prob = sigmoid
+    """
+    return (1.0 - raw_sigmoid) if invert else raw_sigmoid
 
 
 def predict_cnn_pil(pil_image: Image.Image) -> tuple[str, float, float]:
-    """
-    Single image inference.
-    Returns (label, confidence, fake_prob).
-    """
+    """Single IMAGE inference — CNN + ViT ensemble."""
+    
+    # ── CNN score ─────────────────────────────────────────────
     arr       = _preprocess_pil(pil_image)
     raw       = float(model(np.expand_dims(arr, 0), training=False).numpy()[0][0])
-    fake_prob = _raw_to_fake_prob(raw)
-    label     = "fake" if fake_prob >= FAKE_THRESHOLD else "real"
-    conf      = fake_prob if label == "fake" else (1.0 - fake_prob)
+    cnn_fake  = _raw_to_fake_prob(raw, invert=IMAGE_INVERT_SIGMOID)
 
-    # Detailed log for every prediction — helps debug miscalibration
-    print(f"   [CNN] raw_sigmoid={raw:.4f}  fake_prob={fake_prob:.4f}  "
-          f"label={label.upper()}  conf={conf:.4f}")
+    # ── HuggingFace ViT score ──────────────────────────────────
+    hf_fake = cnn_fake  # fallback if HF not loaded
+    if hf_detector is not None:
+        try:
+            results = hf_detector(pil_image)
+            # Find the 'fake' label score
+            for r in results:
+                if "fake" in r["label"].lower():
+                    hf_fake = r["score"]
+                    break
+        except Exception as e:
+            print(f"   [HF] inference failed: {e}")
 
+    # ── Ensemble: take the higher of the two ──────────────────
+    # If EITHER model thinks it's fake, flag it
+    fake_prob = max(cnn_fake, hf_fake)
+
+    label = "fake" if fake_prob >= IMAGE_FAKE_THRESHOLD else "real"
+    conf  = fake_prob if label == "fake" else (1.0 - fake_prob)
+
+    print(f"   [IMAGE] cnn_fake={cnn_fake:.4f}  hf_fake={hf_fake:.4f}  "
+          f"ensemble={fake_prob:.4f}  label={label.upper()}")
     return label, conf, fake_prob
 
 
 def predict_cnn_batch(
     pil_images: list[Image.Image],
 ) -> tuple[list[str], list[float], list[float]]:
-    """Batched CNN inference. Returns (labels, confidences, fake_probs)."""
+    """Batched VIDEO frame inference. Uses VIDEO_INVERT_SIGMOID + VIDEO_FAKE_THRESHOLD."""
     if not pil_images:
         return [], [], []
     batch = np.stack([_preprocess_pil(img) for img in pil_images])
@@ -238,8 +268,8 @@ def predict_cnn_batch(
 
     labels, confs, fake_probs = [], [], []
     for raw in raws:
-        fake_p = _raw_to_fake_prob(float(raw))
-        label  = "fake" if fake_p >= FAKE_THRESHOLD else "real"
+        fake_p = _raw_to_fake_prob(float(raw), invert=VIDEO_INVERT_SIGMOID)
+        label  = "fake" if fake_p >= VIDEO_FAKE_THRESHOLD else "real"
         conf   = fake_p if label == "fake" else (1.0 - fake_p)
         labels.append(label)
         confs.append(conf)
@@ -296,7 +326,6 @@ async def diagnose(file: UploadFile = File(...)):
     - raw sigmoid output
     - fake_prob with current INVERT_SIGMOID setting
     - what result you'd get if INVERT_SIGMOID were flipped
-
     Use this to confirm whether your .env setting is correct.
     curl -X POST http://localhost:8000/diagnose -F "file=@your_image.jpg"
     """
@@ -449,7 +478,7 @@ async def analyse_video(file: UploadFile = File(...)):
 
         # ── Aggregate verdict ─────────────────────────────────────────────────
         mean_fake_prob   = float(np.mean(fake_probs))
-        overall_verdict  = "fake" if mean_fake_prob >= FAKE_THRESHOLD else "real"
+        overall_verdict  = "fake" if mean_fake_prob >= VIDEO_FAKE_THRESHOLD else "real"
         overall_conf     = mean_fake_prob if overall_verdict == "fake" else (1.0 - mean_fake_prob)
         fake_frame_count = sum(1 for fr in frame_results if fr.verdict == "fake")
 
