@@ -381,7 +381,7 @@
           </div>
 
           <div class="gemini-input-row">
-            <button class="gemini-icon-btn gemini-attach" onclick="openAttachMenu(event)" title="Upload file (max 5 MB)" id="attach-btn">
+            <button class="gemini-icon-btn gemini-attach" onclick="openAttachMenu(event)" title="Upload file (max 3 MB)" id="attach-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
               </svg>
@@ -403,7 +403,7 @@
               </button>
             </div>
 
-            <div class="gemini-placeholder" id="gemini-placeholder" onclick="triggerFileInput()">Upload a file… (max 5 MB)</div>
+            <div class="gemini-placeholder" id="gemini-placeholder" onclick="triggerFileInput()">Upload a file… (max 3 MB)</div>
 
             <div class="gemini-right-actions">
               <button class="gemini-icon-btn" onclick="toggleAdvanced()" title="Settings" id="advanced-toggle">
@@ -437,7 +437,7 @@
 
         <!--
           FILE INPUTS — max size enforced via onchange + checkFileSize().
-          The accept attribute lists valid formats; size check blocks > 5 MB.
+          The accept attribute lists valid formats; size check blocks > 3 MB.
         -->
         <input type="file" id="file-input-image"
                accept=".jpg,.jpeg,.png,.webp"
@@ -455,13 +455,13 @@
               <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
               <polyline points="21 15 16 10 5 21"/>
             </svg>
-            Upload Image <span style="font-size:0.72em;opacity:0.6">(max 5 MB)</span>
+            Upload Image <span style="font-size:0.72em;opacity:0.6">(max 3 MB)</span>
           </button>
           <button class="attach-option" onclick="selectMode('video', true); closeAttachMenu()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
             </svg>
-            Upload Video <span style="font-size:0.72em;opacity:0.6">(max 5 MB)</span>
+            Upload Video <span style="font-size:0.72em;opacity:0.6">(max 3 MB)</span>
           </button>
         </div>
       </div>
@@ -528,7 +528,7 @@
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             <div>
-              <div style="font-family:var(--font-ui);font-size:0.82rem;font-weight:600;color:var(--text)">Maximum file size: <span style="color:#ea4335">5 MB</span></div>
+              <div style="font-family:var(--font-ui);font-size:0.82rem;font-weight:600;color:var(--text)">Maximum file size: <span style="color:#ea4335">3 MB</span></div>
               <div style="font-family:var(--font-ui);font-size:0.72rem;color:var(--text-3);margin-top:2px">Applies to both images and videos. Larger files will be rejected.</div>
             </div>
           </div>
@@ -562,14 +562,14 @@
     }
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
 
-    // ── 5 MB file-size guard ───────────────────────────────────
+    // ── 3 MB file-size guard ───────────────────────────────────
     // Called by onchange on both file inputs.
     // If the file is too large:
     //   1. Shows a styled error message in the chat.
     //   2. Resets the input so the same oversized file can't slip through.
     //   3. Hides the preview strip in case it was briefly shown.
     // If the file is fine, hands it straight to app.js handleFile().
-    const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+    const MAX_BYTES = 3 * 1024 * 1024; // 3 MB
 
     function checkFileSize(input) {
       const file = input.files && input.files[0];
@@ -600,7 +600,7 @@
               '<div>' +
                 '<b>File too large — upload blocked</b><br>' +
                 '\u201c' + file.name + '\u201d is <b>' + (file.size / 1048576).toFixed(2) + ' MB</b>. ' +
-                'The maximum allowed size is <b>5 MB</b>.<br>' +
+                'The maximum allowed size is <b>3 MB</b>.<br>' +
                 '<span style="font-size:0.77rem;opacity:0.75">Please compress or trim the file and try again.</span>' +
               '</div>' +
             '</div>' +
