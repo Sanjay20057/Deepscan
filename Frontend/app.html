@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepScan — AI Deepfake Detector</title>
+  <link rel="icon" href="data:,">   <!-- ADD THIS -->
+  <link rel="stylesheet" href="static/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    });
+  }
+  </script>
+  <style>
+    /* ────────────────────────────────────────────────────
+       MOBILE TOP BAR
+       Key: display:flex inside .main flex column — NOT fixed/absolute.
+       This means it pushes messages DOWN naturally; no overlap.
+    ──────────────────────────────────────────────────── */
+    .mobile-topbar {
+      display: none;           /* hidden on desktop */
+      flex-shrink: 0;
+      height: 52px;
+      width: 100%;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border2);
+      align-items: center;
+      padding: 0 12px;
+      gap: 10px;
+    }
+
+    .mobile-ham {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mobile-ham:hover { background: var(--bg4); color: var(--text); }
+
+    .mobile-brand {
+      flex: 1;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mobile-brand-name {
+      font-family: var(--font-ui);
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .mobile-home-link {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 12px;
+      border-radius: 50px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--text-2);
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-decoration: none;
+      flex-shrink: 0;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .mobile-home-link:hover { background: var(--bg3); color: var(--text); }
+
+    /* Desktop sidebar back-to-home */
+    .back-home-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 9px 14px;
+      border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: transparent;
+      color: var(--text-2);
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      margin-top: 6px;
+    }
+    .back-home-btn:hover {
+      background: rgba(66,133,244,0.08);
+      border-color: rgba(66,133,244,0.25);
+      color: var(--accent-blue);
+    }
+
+    /* ── File-size error toast ────────────────────────── */
+    .size-error-toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(234,67,53,0.08);
+      border: 1px solid rgba(234,67,53,0.30);
+      border-left: 3px solid #ea4335;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-family: var(--font-ui);
+      font-size: 0.83rem;
+      color: #ea4335;
+      line-height: 1.5;
+    }
+    .size-error-toast svg { flex-shrink: 0; margin-top: 1px; }
+    .size-error-toast b   { color: #ff6b6b; }
+
+    /* ── Server-offline restart banner ────────────────────
+       Shown when BOTH the API and CNN status dots are "off".
+       Sits above the messages list so it's impossible to miss,
+       and links out to the HF Space so the person can wake/
+       restart it themselves.
+    ──────────────────────────────────────────────────── */
+    .offline-restart-banner {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(234,67,53,0.08);
+      border: 1px solid rgba(234,67,53,0.30);
+      border-left: 3px solid #ea4335;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 12px 16px 0;
+      font-family: var(--font-ui);
+      font-size: 0.83rem;
+      color: #ff8a80;
+      line-height: 1.5;
+    }
+    .offline-restart-banner.visible { display: flex; }
+    .offline-restart-banner svg { flex-shrink: 0; margin-top: 1px; color: #ea4335; }
+    .offline-restart-banner b { color: #ff6b6b; }
+    .offline-restart-banner a {
+      color: #4285f4;
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-color: rgba(66,133,244,0.4);
+    }
+    .offline-restart-banner a:hover { color: #8b5cf6; }
+
+    /* Small link under the sidebar status badges, same idea,
+       compact, visible even when the sidebar drawer is the
+       only thing on screen (mobile). */
+    .sidebar-restart-link {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(234,67,53,0.30);
+      background: rgba(234,67,53,0.08);
+      color: #ff8a80;
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .sidebar-restart-link.visible { display: flex; }
+    .sidebar-restart-link:hover { background: rgba(234,67,53,0.15); }
+    .sidebar-restart-link svg { flex-shrink: 0; }
+
+    /* ────────────────────────────────────────────────────
+       MOBILE OVERRIDES  (≤640px)
+    ──────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+
+      /* Show the topbar (it's a flex child of .main) */
+      .mobile-topbar { display: flex; }
+
+      /* Sidebar becomes a fixed drawer */
+      .sidebar {
+        position: fixed !important;
+        top: 0; left: 0; bottom: 0;
+        width: 280px;
+        min-height: 100%;
+        transform: translateX(-100%);
+        z-index: 500;
+        transition: transform 0.28s ease;
+        box-shadow: 6px 0 28px rgba(0,0,0,0.6);
+      }
+      .sidebar.open { transform: translateX(0); }
+
+      /* Overlay behind open sidebar */
+      .sidebar-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(3px);
+        z-index: 400;
+        display: none;
+      }
+      .sidebar-overlay.visible { display: block; }
+
+      /* Messages take available space, no extra top padding needed */
+      .messages { padding: 12px 0 12px; }
+
+      /* Bot/user messages: full width, compact padding */
+      .msg.bot  { padding: 10px 12px 10px 12px; }
+      .msg.user { padding: 6px 12px 6px 12px; }
+      .msg.user .msg-bubble { max-width: 88vw; font-size: 0.84rem; }
+
+      /* Chip grid: 2 equal columns */
+      .chip-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+      }
+      .chip { padding: 8px 10px; }
+      .chip-label { font-size: 0.58rem; }
+      .chip-value { font-size: 0.88rem; }
+
+      /* Frame grid: 2 columns */
+      .frame-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+      }
+      .frames-header { font-size: 0.68rem; }
+
+      /* Verdict banner compact */
+      .verdict-banner { padding: 12px 14px; gap: 10px; }
+      .verdict-icon   { width: 32px; height: 32px; font-size: 1rem; }
+      .verdict-label  { font-size: 0.88rem; }
+      .verdict-sub    { font-size: 0.72rem; }
+
+      /* Input dock */
+      .input-dock { padding: 6px 10px 14px; }
+      .gemini-input-row { padding: 8px 10px; min-height: 50px; gap: 2px; }
+      .gemini-mode-pill { padding: 5px 8px; font-size: 0.7rem; gap: 3px; }
+      .gemini-mode-pill svg { width: 12px; height: 12px; }
+      .gemini-placeholder { font-size: 0.78rem; padding: 0 4px; }
+
+      /* History / Settings */
+      .view-header  { padding: 14px 16px 10px; }
+      .history-list { padding: 8px 16px 80px; }
+      .settings-body { padding: 8px 16px 80px; }
+
+      .history-item  { padding: 12px; gap: 10px; }
+      .history-thumb { width: 48px; height: 34px; }
+      .history-icon  { width: 48px; height: 34px; }
+
+      .explanation-block { padding: 12px 14px; font-size: 0.82rem; }
+      .download-pdf-btn  { width: 100%; justify-content: center; padding: 11px 16px; }
+
+      .gemini-advanced-panel { flex-direction: column; }
+
+      /* Attach menu slides up from bottom */
+      .attach-menu {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        border-radius: 14px 14px 0 0;
+        padding: 12px 12px 28px;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+        animation: slideUpMenu 0.2s ease;
+        z-index: 600;
+      }
+      @keyframes slideUpMenu {
+        from { transform: translateY(100%); }
+        to   { transform: translateY(0); }
+      }
+      .attach-option { padding: 14px 16px; font-size: 0.9rem; }
+
+      .intro-card  { max-width: 100%; }
+      .intro-title { font-size: 1.2rem; }
+      .intro-body  { font-size: 0.82rem; }
+      .intro-steps { font-size: 0.78rem; line-height: 1.9; padding: 12px 14px; }
+
+      .signal-wrap  { flex-direction: column; }
+      .signal-table { min-width: unset; width: 100%; }
+      .analysis-img { max-width: 100%; }
+    }
+
+    @media (max-width: 380px) {
+      .gemini-mode-pill span:not(svg) { display: none; }
+      .gemini-placeholder { font-size: 0.72rem; }
+      /* ── VIEW Isolation Fix ────────────────────────────────────
+       Prevents non-active views from leaking into layout on
+       mobile — some browsers keep flex:none children in flow
+       even with display:none unless explicitly forced out.
+      ──────────────────────────────────────────────────────────── */
+      .view:not(.active) {
+        display: none !important;
+        height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        flex: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-logo">
+        <div class="logo-gem">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <path d="M14 2L26 14L14 26L2 14Z" fill="url(#gem-grad)" opacity="0.9"/>
+            <path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.15"/>
+            <defs>
+              <linearGradient id="gem-grad" x1="2" y1="2" x2="26" y2="26">
+                <stop offset="0%" stop-color="#4285f4"/>
+                <stop offset="50%" stop-color="#8b5cf6"/>
+                <stop offset="100%" stop-color="#06b6d4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="logo-text">DeepScan</span>
+      </div>
+      <button class="new-session-btn" onclick="clearChat()" title="New session">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="chat" onclick="switchView('chat'); closeSidebar()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span>Analysis</span>
+      </button>
+      <button class="nav-item" data-view="history" onclick="switchView('history'); closeSidebar()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>History</span>
+      </button>
+      <button class="nav-item" data-view="settings" onclick="switchView('settings'); closeSidebar()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+
+      <a href="./index.html" class="back-home-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        <span>Back to Home</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill" id="api-status-badge">
+        <span class="status-dot dot-off"></span>
+        <span class="status-text">Offline</span>
+      </div>
+      <div class="status-pill" id="cnn-status-badge">
+        <span class="status-dot dot-off"></span>
+        <span class="status-text">CNN Offline</span>
+      </div>
+
+      <!-- Shown automatically when both badges above go offline. -->
+      <a class="sidebar-restart-link" id="sidebar-restart-link"
+         href="https://huggingface.co/spaces/sanjay72005/Deepscan"
+         target="_blank" rel="noopener noreferrer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6"/>
+          <path d="M2 11.5a10 10 0 0 1 18.5-4M22 12.5a10 10 0 0 1-18.5 4"/>
+        </svg>
+        <span>Server asleep — click to restart</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!--
+      MOBILE TOP BAR — child of .main (flex column).
+      It is NOT position:fixed or absolute.
+      It sits ABOVE the view div, pushing content down naturally.
+      display:none on desktop, display:flex on ≤640px.
+    -->
+    <div class="mobile-topbar">
+      <button class="mobile-ham" onclick="openSidebar()" aria-label="Open menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="mobile-brand">
+        <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2L26 14L14 26L2 14Z" fill="url(#mob-gem-g)" opacity="0.9"/>
+          <path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.15"/>
+          <defs>
+            <linearGradient id="mob-gem-g" x1="2" y1="2" x2="26" y2="26">
+              <stop offset="0%" stop-color="#4285f4"/>
+              <stop offset="50%" stop-color="#8b5cf6"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="mobile-brand-name">DeepScan</span>
+      </div>
+
+      <a href="./index.html" class="mobile-home-link">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Home
+      </a>
+    </div>
+
+    <!-- CHAT VIEW -->
+    <div class="view active" id="view-chat">
+
+      <!-- Shown automatically when both the API and CNN badges go offline. -->
+      <div class="offline-restart-banner" id="offline-restart-banner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <div>
+          <b>Server offline</b> — the CNN model and FastAPI backend are both unreachable.
+          Hugging Face Spaces put idle Spaces to sleep, so this usually just needs a wake-up.
+          <a href="https://huggingface.co/spaces/sanjay72005/Deepscan" target="_blank" rel="noopener noreferrer">
+            Click here to open the Space and restart it
+          </a>.
+        </div>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="input-dock">
+        <div class="gemini-input-card">
+
+          <div class="gemini-preview-strip" id="gemini-preview-strip" style="display:none">
+            <div class="gemini-file-chip" id="gemini-file-chip">
+              <img id="gemini-preview-img" src="" alt="" style="display:none" />
+              <div class="gemini-file-icon" id="gemini-file-icon" style="display:none">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+              </div>
+              <span class="gemini-file-name" id="gemini-file-name"></span>
+              <button class="gemini-remove-chip" onclick="removeFile()" title="Remove">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="gemini-input-row">
+            <button class="gemini-icon-btn gemini-attach" onclick="openAttachMenu(event)" title="Upload file (max 3 MB)" id="attach-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+            </button>
+
+            <div class="gemini-mode-pills">
+              <button class="gemini-mode-pill active" id="gpill-image" onclick="selectMode('image', true)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <span>Image</span>
+              </button>
+              <button class="gemini-mode-pill" id="gpill-video" onclick="selectMode('video', true)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+                <span>Video</span>
+              </button>
+            </div>
+
+            <div class="gemini-placeholder" id="gemini-placeholder" onclick="triggerFileInput()">Upload a file… (max 3 MB)</div>
+
+            <div class="gemini-right-actions">
+              <button class="gemini-icon-btn" onclick="toggleAdvanced()" title="Settings" id="advanced-toggle">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+              <button class="gemini-send-btn" id="send-btn" onclick="runAnalysis()" title="Analyse">
+                <span id="send-label">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="gemini-advanced-panel" id="gemini-advanced-panel">
+            <div class="adv-field">
+              <label>Flask Server URL</label>
+              <input type="text" id="api-url-input" placeholder="Leave blank if served by Flask" />
+            </div>
+            <div class="adv-field">
+              <label>Groq API Key</label>
+              <input type="password" id="groq-key-input" placeholder="gsk_… or set in .env" />
+            </div>
+          </div>
+
+        </div>
+
+        <!--
+          FILE INPUTS — max size enforced via onchange + checkFileSize().
+          The accept attribute lists valid formats; size check blocks > 3 MB.
+        -->
+        <input type="file" id="file-input-image"
+               accept=".jpg,.jpeg,.png,.webp"
+               hidden
+               onchange="checkFileSize(this)" />
+
+        <input type="file" id="file-input-video"
+               accept=".mp4,.avi,.mov,.mkv,.webm"
+               hidden
+               onchange="checkFileSize(this)" />
+
+        <div class="attach-menu" id="attach-menu" style="display:none">
+          <button class="attach-option" onclick="selectMode('image', true); closeAttachMenu()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            Upload Image <span style="font-size:0.72em;opacity:0.6">(max 3 MB)</span>
+          </button>
+          <button class="attach-option" onclick="selectMode('video', true); closeAttachMenu()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+            </svg>
+            Upload Video <span style="font-size:0.72em;opacity:0.6">(max 3 MB)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY VIEW -->
+    <div class="view" id="view-history">
+      <div class="view-header">
+        <h2>Analysis History</h2>
+        <button class="ghost-btn" onclick="clearHistory()">Clear all</button>
+      </div>
+      <div class="history-list" id="history-list">
+        <p class="empty-state">No analyses yet. Run a scan to see history here.</p>
+      </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div class="view" id="view-settings">
+      <div class="view-header">
+        <h2>Settings</h2>
+      </div>
+      <div class="settings-body">
+        <div class="settings-card">
+          <h3 class="settings-section-title">Pipeline</h3>
+          <label class="toggle-row">
+            <span>CNN Analysis</span>
+            <input type="checkbox" id="set-cnn" checked disabled />
+          </label>
+          <label class="toggle-row" style="opacity:0.4;pointer-events:none">
+            <span>Sightengine <span style="font-size:0.75em;color:var(--text-3)">(removed)</span></span>
+            <input type="checkbox" id="set-se" disabled />
+          </label>
+          <label class="toggle-row">
+            <span>Groq Explanation</span>
+            <input type="checkbox" id="set-groq" checked />
+          </label>
+        </div>
+        <div class="settings-card">
+          <h3 class="settings-section-title">Thresholds</h3>
+          <label class="slider-row">
+            <div class="slider-header"><span>Video fake threshold</span><b id="thr-video-val">0.50</b></div>
+            <input type="range" min="0" max="1" step="0.05" value="0.50" id="thr-video" oninput="document.getElementById('thr-video-val').textContent=this.value" />
+          </label>
+          <label class="slider-row">
+            <div class="slider-header"><span>Image fake threshold</span><b id="thr-img-val">0.50</b></div>
+            <input type="range" min="0" max="1" step="0.05" value="0.50" id="thr-img" oninput="document.getElementById('thr-img-val').textContent=this.value" />
+          </label>
+          <label class="slider-row">
+            <div class="slider-header"><span>Frames per video</span><b id="fpv-val">20</b></div>
+            <input type="range" min="5" max="40" step="5" value="20" id="fpv" oninput="document.getElementById('fpv-val').textContent=this.value" />
+          </label>
+          <p style="font-size:0.72rem;color:var(--text-3);margin-top:8px;padding:0 2px">
+            ℹ️ Backend threshold fixed at <b>0.50</b> (<code>fake_prob = 1 − sigmoid</code>).
+          </p>
+        </div>
+
+        <!-- Upload limit info card -->
+        <div class="settings-card" style="border-color:rgba(234,67,53,0.15)">
+          <h3 class="settings-section-title">Upload Limits</h3>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(234,67,53,0.06);border:1px solid rgba(234,67,53,0.15);border-radius:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div>
+              <div style="font-family:var(--font-ui);font-size:0.82rem;font-weight:600;color:var(--text)">Maximum file size: <span style="color:#ea4335">3 MB</span></div>
+              <div style="font-family:var(--font-ui);font-size:0.72rem;color:var(--text-3);margin-top:2px">Applies to both images and videos. Larger files will be rejected.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card" style="border-color:rgba(234,67,53,0.15)">
+          <h3 class="settings-section-title">Server</h3>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(234,67,53,0.06);border:1px solid rgba(234,67,53,0.15);border-radius:10px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea4335" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6"/>
+              <path d="M2 11.5a10 10 0 0 1 18.5-4M22 12.5a10 10 0 0 1-18.5 4"/>
+            </svg>
+            <div>
+              <div style="font-family:var(--font-ui);font-size:0.82rem;font-weight:600;color:var(--text)">Backend hosted on Hugging Face Spaces</div>
+              <div style="font-family:var(--font-ui);font-size:0.72rem;color:var(--text-3);margin-top:2px">
+                If the CNN or API status shows offline, the Space may be asleep.
+                <a href="https://huggingface.co/spaces/sanjay72005/Deepscan" target="_blank" rel="noopener noreferrer" style="color:#4285f4">Open the Space to restart it</a>.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card" style="border-color:rgba(66,133,244,0.12)">
+          <h3 class="settings-section-title">Navigation</h3>
+          <a href="./index.html" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(66,133,244,0.1),rgba(139,92,246,0.08));border:1px solid rgba(66,133,244,0.2);border-radius:10px;padding:10px 16px;color:var(--accent-blue);text-decoration:none;font-family:var(--font-ui);font-size:0.83rem;font-weight:500;transition:all 0.2s;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Back to Home
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="static/app.js"></script>
+  <script>
+    // ── Sidebar (mobile) ───────────────────────────────────────
+    function openSidebar() {
+      document.getElementById('sidebar').classList.add('open');
+      document.getElementById('sidebar-overlay').classList.add('visible');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebar-overlay').classList.remove('visible');
+      document.body.style.overflow = '';
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+
+    // ── 3 MB file-size guard ───────────────────────────────────
+    // Called by onchange on both file inputs.
+    // If the file is too large:
+    //   1. Shows a styled error message in the chat.
+    //   2. Resets the input so the same oversized file can't slip through.
+    //   3. Hides the preview strip in case it was briefly shown.
+    // If the file is fine, hands it straight to app.js handleFile().
+    const MAX_BYTES = 3 * 1024 * 1024; // 3 MB
+
+    function checkFileSize(input) {
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      if (file.size > MAX_BYTES) {
+        // Build styled error card in the chat
+        const msgs = document.getElementById('messages');
+        const card = document.createElement('div');
+        card.className = 'msg bot';
+        card.innerHTML =
+          '<div class="msg-sender">' +
+            '<div class="gem-avatar">' +
+              '<svg width="14" height="14" viewBox="0 0 28 28" fill="none">' +
+                '<path d="M14 2L26 14L14 26L2 14Z" fill="white" opacity="0.9"/>' +
+                '<path d="M14 6L22 14L14 22L6 14Z" fill="white" opacity="0.25"/>' +
+              '</svg>' +
+            '</div>' +
+            '<span class="sender-name">DeepScan</span>' +
+          '</div>' +
+          '<div class="msg-content">' +
+            '<div class="size-error-toast">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<circle cx="12" cy="12" r="10"/>' +
+                '<line x1="12" y1="8" x2="12" y2="12"/>' +
+                '<line x1="12" y1="16" x2="12.01" y2="16"/>' +
+              '</svg>' +
+              '<div>' +
+                '<b>File too large — upload blocked</b><br>' +
+                '\u201c' + file.name + '\u201d is <b>' + (file.size / 1048576).toFixed(2) + ' MB</b>. ' +
+                'The maximum allowed size is <b>3 MB</b>.<br>' +
+                '<span style="font-size:0.77rem;opacity:0.75">Please compress or trim the file and try again.</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        msgs.appendChild(card);
+        msgs.scrollTop = msgs.scrollHeight;
+
+        // Reset input so the file is not retained
+        input.value = '';
+
+        // Hide preview strip if it appeared for a split second
+        var strip = document.getElementById('gemini-preview-strip');
+        if (strip) strip.style.display = 'none';
+
+        return; // do NOT pass to handleFile
+      }
+
+      // File is within the limit — delegate to app.js
+      handleFile(file);
+    }
+
+    // ── Offline / restart banner ────────────────────────────────
+    // app.js (not shown here) is what actually pings the backend and
+    // toggles the "dot-off" / "dot-on" classes on the two status dots
+    // in #api-status-badge and #cnn-status-badge. Rather than duplicate
+    // that health-check logic, this just watches those two dots and
+    // shows a "restart the server" link (to the HF Space) whenever
+    // BOTH are offline at the same time.
+    (function () {
+      var apiDot = document.querySelector('#api-status-badge .status-dot');
+      var cnnDot = document.querySelector('#cnn-status-badge .status-dot');
+      var banner = document.getElementById('offline-restart-banner');
+      var sidebarLink = document.getElementById('sidebar-restart-link');
+
+      function bothOffline() {
+        return apiDot && cnnDot &&
+               apiDot.classList.contains('dot-off') &&
+               cnnDot.classList.contains('dot-off');
+      }
+
+      function refresh() {
+        var offline = bothOffline();
+        banner.classList.toggle('visible', offline);
+        sidebarLink.classList.toggle('visible', offline);
+      }
+
+      if (apiDot && cnnDot) {
+        var observer = new MutationObserver(refresh);
+        observer.observe(apiDot, { attributes: true, attributeFilter: ['class'] });
+        observer.observe(cnnDot, { attributes: true, attributeFilter: ['class'] });
+        // Also re-check periodically in case app.js swaps the dot
+        // elements themselves rather than just their classes.
+        setInterval(refresh, 4000);
+        refresh();
+      }
+    })();
+  </script>
+</body>
+</html>
